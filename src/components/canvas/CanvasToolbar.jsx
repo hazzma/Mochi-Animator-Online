@@ -1,14 +1,15 @@
 import React from 'react';
 import useProjectStore from '../../store/projectStore';
 import { 
-  Pencil, Eraser, PaintBucket, Square, Circle, 
+  Pencil, Eraser, PaintBucket, Square, Circle,
   MousePointer2, Undo2, Redo2, Layers,
-  Settings2, Grid3X3, HelpCircle, X
+  Settings2, Grid3X3, HelpCircle, X,
+  Clock, Type, Activity, BarChart3, Image as ImageIcon
 } from 'lucide-react';
 
 const CanvasToolbar = () => {
-  const { project, setEditor, undo, redo } = useProjectStore();
-  const { activeTool, radius, zoom, onionSkin, showGrid, brushSize, brushShape } = project.editor;
+  const { project, setEditor, undo, redo, addComponent } = useProjectStore();
+  const { activeTool, radius, zoom, onionSkin, showGrid, brushSize, brushShape, currentMode, selectedSpriteId } = project.editor;
   const [showHelp, setShowHelp] = React.useState(false);
 
   const tools = [
@@ -19,6 +20,15 @@ const CanvasToolbar = () => {
     { id: 'rect', icon: Square, label: 'Rectangle', desc: 'Draw hollow rectangles.', shortcut: 'R' },
     { id: 'roundedRect', icon: Square, label: 'Rounded Rect', desc: 'Draw rectangles with adjustable corner radius.', shortcut: 'O', sub: true },
     { id: 'ellipse', icon: Circle, label: 'Ellipse', desc: 'Draw hollow circles and ovals.', shortcut: 'C' },
+  ];
+
+  const designerTools = [
+    { id: 'move', icon: MousePointer2, label: 'Select Tool', desc: 'Select and move UI components.', shortcut: 'V' },
+    { id: 'ui-clock', icon: Clock, label: 'Clock', desc: 'Add a digital/analog clock component.', shortcut: 'T' },
+    { id: 'ui-label', icon: Type, label: 'Text Label', desc: 'Add a static or dynamic text label.', shortcut: 'L' },
+    { id: 'ui-bar', icon: Activity, label: 'Progress Bar', desc: 'Add a battery, RAM, or health bar.', shortcut: 'B' },
+    { id: 'ui-graph', icon: BarChart3, label: 'Graph', desc: 'Add a real-time line/bar graph.', shortcut: 'G' },
+    { id: 'ui-icon', icon: ImageIcon, label: 'Asset Icon', desc: 'Add a pre-defined icon from the library.', shortcut: 'I' },
   ];
 
   return (
@@ -44,13 +54,19 @@ const CanvasToolbar = () => {
 
         {/* Tools Group */}
         <div className="flex items-center gap-1">
-          {tools.map((tool) => (
+          {(currentMode === 'designer' ? designerTools : tools).map((tool) => (
             <button
               key={tool.id}
-              onClick={() => setEditor({ activeTool: tool.id })}
+              onClick={() => {
+                if (currentMode === 'designer' && tool.id.startsWith('ui-')) {
+                  addComponent(selectedSpriteId, tool.id);
+                } else {
+                  setEditor({ activeTool: tool.id });
+                }
+              }}
               className={`p-2 rounded flex items-center justify-center transition-all group relative ${
                 activeTool === tool.id 
-                  ? 'bg-oled/20 text-oled border border-oled/30' 
+                  ? (currentMode === 'designer' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-oled/20 text-oled border border-oled/30')
                   : 'text-[#666] hover:bg-[#222] hover:text-[#999]'
               }`}
             >
@@ -59,7 +75,7 @@ const CanvasToolbar = () => {
               
               {/* Tooltip Overlay */}
               <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-2 py-1 bg-black text-white text-[10px] rounded opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 border border-[#333] font-bold uppercase tracking-wider">
-                {tool.label} <span className="text-oled ml-1">[{tool.shortcut}]</span>
+                {tool.label} <span className={currentMode === 'designer' ? 'text-blue-400 ml-1' : 'text-oled ml-1'}>[{tool.shortcut}]</span>
               </div>
             </button>
           ))}

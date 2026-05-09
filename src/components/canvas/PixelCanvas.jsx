@@ -5,7 +5,7 @@ import { floodFill, drawRect, drawEllipse, drawRoundedRect } from '../../utils/c
 
 const PixelCanvas = () => {
   const canvasRef = useRef(null);
-  const { project, updateSpritePixels, updateKeyframePixels, setKeyframe, recordHistory } = useProjectStore();
+  const { project, updateSpritePixels, updateKeyframePixels, updateComponent, setKeyframe, recordHistory } = useProjectStore();
   const { meta, sprites, keyframes, editor } = project;
   const { currentFrame, zoom, showGrid, activeTool, selectedSpriteId, radius } = editor;
 
@@ -13,6 +13,14 @@ const PixelCanvas = () => {
   const [startPos, setStartPos] = useState(null);
   const [currentPos, setCurrentPos] = useState(null);
   const [isShiftPressed, setIsShiftPressed] = useState(false);
+  const [systemTime, setSystemTime] = useState(new Date());
+  const [compDragOffset, setCompDragOffset] = useState({ x: 0, y: 0 });
+
+  // Clock Update
+  useEffect(() => {
+    const timer = setInterval(() => setSystemTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Helper to get selected sprite
   const selectedSprite = sprites.find(s => s.id === selectedSpriteId);
@@ -108,6 +116,60 @@ const PixelCanvas = () => {
           }
         }
       }
+      }
+
+      // ---------------------------------------------------------
+      // Step 3: Render UI Components (Lopaka Style)
+      // ---------------------------------------------------------
+      sprite.uiComponents?.forEach(comp => {
+        ctx.save();
+        const cx = (pos.x + comp.x) * zoom;
+        const cy = (pos.y + comp.y) * zoom;
+        const cw = comp.w * zoom;
+        const ch = comp.h * zoom;
+
+        // Selection highlight
+        if (sprite.id === selectedSpriteId) {
+          ctx.strokeStyle = 'rgba(0, 255, 65, 0.3)';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(cx - 2, cy - 2, cw + 4, ch + 4);
+        }
+
+        ctx.fillStyle = sprite.id === selectedSpriteId ? '#00FF41' : '#ffffff';
+        ctx.font = `${ch * 0.8}px monospace`;
+        ctx.textBaseline = 'top';
+
+        if (comp.type === 'ui-clock') {
+          const hours = systemTime.getHours().toString().padStart(2, '0');
+          const mins = systemTime.getMinutes().toString().padStart(2, '0');
+          ctx.fillText(`${hours}:${mins}`, cx, cy);
+        } else if (comp.type === 'ui-label') {
+          ctx.fillText(comp.props.text || 'LABEL', cx, cy);
+        } else if (comp.type === 'ui-bar') {
+          // Draw frame
+          ctx.strokeStyle = ctx.fillStyle;
+          ctx.lineWidth = 1;
+          ctx.strokeRect(cx, cy, cw, ch);
+          // Draw fill
+          const fillW = (cw * (comp.props.value || 0)) / 100;
+          ctx.fillRect(cx + 2, cy + 2, Math.max(0, fillW - 4), ch - 4);
+        } else if (comp.type === 'ui-graph') {
+          ctx.strokeStyle = ctx.fillStyle;
+          ctx.beginPath();
+          ctx.moveTo(cx, cy + ch);
+          for (let i = 0; i < 5; i++) {
+            ctx.lineTo(cx + (cw * i / 4), cy + (ch * Math.random()));
+          }
+          ctx.stroke();
+        } else if (comp.type === 'ui-icon') {
+          ctx.fillRect(cx, cy, ch, ch); // Square placeholder
+          ctx.font = `${ch * 0.6}px Arial`;
+          ctx.fillStyle = 'black';
+          ctx.fillText('★', cx + 2, cy);
+        }
+        
+        ctx.restore();
+      });
 
       // Subtle outline for selected sprite boundary
       if (sprite.id === selectedSpriteId) {
@@ -201,6 +263,26 @@ const PixelCanvas = () => {
     setCurrentPos({ x, y });
     setIsDragging(true);
 
+    // Designer Mode: Check for component selection
+    if (editor.currentMode === 'designer' && selectedSprite) {
+      const pos = getInterpolatedPosition(keyframes[selectedSpriteId], currentFrame);
+      const relX = x - pos.x;
+      const relY = y - pos.y;
+
+      const hitComp = [...(selectedSprite.uiComponents || [])].reverse().find(c => 
+        relX >= c.x && relX <= c.x + c.w &&
+        relY >= c.y && relY <= c.y + c.h
+      );
+
+      if (hitComp) {
+        setEditor({ selectedCompId: hitComp.id });
+        setCompDragOffset({ x: relX - hitComp.x, y: relY - hitComp.y });
+        return; // Don't proceed to pixel drawing
+      } else {
+        setEditor({ selectedCompId: null });
+      }
+    }
+
     if (activeTool === 'pencil' || activeTool === 'eraser' || activeTool === 'fill') {
       const pos = getInterpolatedPosition(keyframes[selectedSpriteId], currentFrame);
       const relX = x - pos.x;
@@ -218,6 +300,17 @@ const PixelCanvas = () => {
     if (!isDragging || !selectedSpriteId) return;
     const { x, y } = getPixelCoords(e);
     setCurrentPos({ x, y });
+
+    if (editor.selectedCompId) {
+      const pos = getInterpolatedPosition(keyframes[selectedSpriteId], currentFrame);
+      const relX = x - pos.x;
+      const relY = y - pos.y;
+      updateComponent(selectedSpriteId, editor.selectedCompId, {
+        x: relX - compDragOffset.x,
+        y: relY - compDragOffset.y
+      });
+      return;
+    }
 
     if (activeTool === 'move') {
       const dx = x - startPos.x;

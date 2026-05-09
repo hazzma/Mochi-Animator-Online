@@ -29,6 +29,7 @@ const useProjectStore = create(
             width: 128,
             height: 64,
             pixels: new Array(128 * 64).fill(false),
+            uiComponents: [], // For Lopaka-style components
           }
         ],
         keyframes: {
@@ -47,6 +48,8 @@ const useProjectStore = create(
           onionSkin: false,
           brushSize: 1,
           brushShape: 'square', // 'square' | 'circle'
+          currentMode: 'animator', // 'animator' | 'designer'
+          selectedCompId: null,
         }
       },
 
@@ -129,6 +132,7 @@ const useProjectStore = create(
             width,
             height,
             pixels: new Array(width * height).fill(false),
+            uiComponents: [],
           };
           
           return {
@@ -238,6 +242,66 @@ const useProjectStore = create(
           )
         }
       })),
+
+      // UI Designer Actions
+      addComponent: (spriteId, type) => {
+        get().recordHistory();
+        set((state) => ({
+          project: {
+            ...state.project,
+            sprites: state.project.sprites.map(s => {
+              if (s.id !== spriteId) return s;
+              const id = `comp_${Date.now()}`;
+              const defaults = {
+                'ui-clock': { w: 40, h: 12, props: { format: 'HH:mm', size: 1 } },
+                'ui-label': { w: 60, h: 10, props: { text: 'HELLO WORLD', size: 1 } },
+                'ui-bar': { w: 32, h: 8, props: { value: 75, style: 'solid' } },
+                'ui-graph': { w: 40, h: 20, props: { type: 'line' } },
+                'ui-icon': { w: 16, h: 16, props: { icon: 'battery' } },
+              };
+              const comp = {
+                id,
+                type,
+                x: 10,
+                y: 10,
+                ...(defaults[type] || { w: 20, h: 20, props: {} })
+              };
+              return { ...s, uiComponents: [...s.uiComponents, comp] };
+            })
+          }
+        }));
+      },
+
+      updateComponent: (spriteId, compId, data) => {
+        set((state) => ({
+          project: {
+            ...state.project,
+            sprites: state.project.sprites.map(s => {
+              if (s.id !== spriteId) return s;
+              return {
+                ...s,
+                uiComponents: s.uiComponents.map(c => 
+                  c.id === compId ? { ...c, ...data } : c
+                )
+              };
+            })
+          }
+        }));
+      },
+
+      removeComponent: (spriteId, compId) => {
+        get().recordHistory();
+        set((state) => ({
+          project: {
+            ...state.project,
+            sprites: state.project.sprites.map(s => 
+              s.id === spriteId 
+                ? { ...s, uiComponents: s.uiComponents.filter(c => c.id !== compId) } 
+                : s
+            )
+          }
+        }));
+      },
 
       // Keyframe Actions
       updateKeyframePixels: (spriteId, frameIndex, pixels) => {

@@ -7,14 +7,16 @@ import Timeline from './components/timeline/Timeline';
 import PreviewPanel from './components/preview/PreviewPanel';
 import ExportModal from './components/export/ExportModal';
 import Home from './components/home/Home';
-import { Home as HomeIcon } from 'lucide-react';
+import { Home as HomeIcon, Menu, X as CloseIcon } from 'lucide-react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import MiniPreview from './components/canvas/MiniPreview';
+import pcbLogo from './assets/PCB LOGO.png';
 
 function App() {
-  const { project, screen, setScreen, undo, redo, setEditor, tickFrame } = useProjectStore();
+  const { project, screen, setScreen, undo, redo, setEditor, tickFrame, removeComponent } = useProjectStore();
   const [showPreview, setShowPreview] = useState(false);
   const [showExport, setShowExport] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
 
   // Animation Heartbeat
   React.useEffect(() => {
@@ -44,6 +46,14 @@ function App() {
       } else if (ctrl && e.key === 'y') {
         redo();
         e.preventDefault();
+      }
+
+      // Delete Shortcut
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (project.editor.selectedCompId) {
+          removeComponent(project.editor.selectedSpriteId, project.editor.selectedCompId);
+          setEditor({ selectedCompId: null });
+        }
       }
 
       // Zoom Shortcuts (Ctrl + Arrow Up/Down)
@@ -89,13 +99,19 @@ function App() {
       <header className="h-12 bg-[#1a1a1a] border-b border-[#333] flex items-center justify-between px-4 shrink-0 z-50">
         <div className="flex items-center gap-3">
           <button 
-            onClick={() => setScreen('home')}
-            className="w-8 h-8 bg-[#222] hover:bg-[#333] rounded flex items-center justify-center border border-[#333] transition-colors group"
+            onClick={() => setShowMenu(true)}
+            className="w-8 h-8 hover:bg-[#222] rounded flex items-center justify-center transition-colors text-[#666] hover:text-white"
           >
-            <HomeIcon size={14} className="text-[#666] group-hover:text-oled transition-colors" />
+            <Menu size={20} />
           </button>
           <div className="w-[1px] h-4 bg-[#333] mx-1"></div>
-          <h1 className="font-semibold tracking-tight text-sm uppercase">
+          <button 
+            onClick={() => setScreen('home')}
+            className="w-10 h-10 bg-white hover:bg-gray-100 rounded-lg flex items-center justify-center border border-[#333] transition-colors group overflow-hidden shadow-[0_0_15px_rgba(255,255,255,0.1)]"
+          >
+            <img src={pcbLogo} alt="Hazzma Logo" className="w-full h-full object-contain p-1 opacity-90 group-hover:opacity-100 transition-opacity" />
+          </button>
+          <h1 className="font-semibold tracking-tight text-sm uppercase hidden md:block">
             Mochi <span className="text-oled">Animator</span>
           </h1>
         </div>
@@ -167,6 +183,82 @@ function App() {
 
       {showPreview && <PreviewPanel onClose={() => setShowPreview(false)} />}
       {showExport && <ExportModal onClose={() => setShowExport(false)} />}
+
+      {/* Side Navigation Menu (Hamburger) */}
+      {showMenu && (
+        <>
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] animate-in fade-in duration-300" onClick={() => setShowMenu(false)} />
+          <div className="fixed inset-y-0 left-0 w-72 bg-[#1a1a1a] border-r border-[#333] z-[101] shadow-2xl animate-in slide-in-from-left duration-300 flex flex-col">
+            <div className="h-12 border-b border-[#333] flex items-center justify-between px-4 bg-[#222]">
+              <span className="text-[10px] font-black uppercase tracking-widest text-[#666]">Navigation Menu</span>
+              <button onClick={() => setShowMenu(false)} className="text-[#666] hover:text-white">
+                <CloseIcon size={18} />
+              </button>
+            </div>
+            
+            <div className="p-4 space-y-6">
+              <div>
+                <h3 className="text-[9px] font-bold text-oled uppercase tracking-[0.2em] mb-4">Core Modes</h3>
+                <div className="space-y-2">
+                  <button 
+                    onClick={() => { setEditor({ currentMode: 'animator' }); setShowMenu(false); }}
+                    className={`w-full text-left px-4 py-3 rounded-xl border transition-all flex items-center gap-3 group ${
+                      project.editor.currentMode === 'animator' 
+                        ? 'bg-oled/10 border-oled/30 text-oled' 
+                        : 'hover:bg-[#222] border-transparent text-[#888]'
+                    }`}
+                  >
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-transform group-hover:scale-110 ${
+                      project.editor.currentMode === 'animator' ? 'bg-oled/20' : 'bg-[#333]'
+                    }`}>🎨</div>
+                    <div>
+                      <div className="text-[11px] font-bold">Pixel Animator</div>
+                      <div className="text-[9px] opacity-60">Classic frame-by-frame & tweening</div>
+                    </div>
+                  </button>
+                  <button 
+                    onClick={() => { setEditor({ currentMode: 'designer' }); setShowMenu(false); }}
+                    className={`w-full text-left px-4 py-3 rounded-xl border transition-all flex items-center gap-3 group ${
+                      project.editor.currentMode === 'designer' 
+                        ? 'bg-blue-500/10 border-blue-500/30 text-blue-400' 
+                        : 'hover:bg-[#222] border-transparent text-[#888]'
+                    }`}
+                  >
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-transform group-hover:scale-110 ${
+                      project.editor.currentMode === 'designer' ? 'bg-blue-500/20' : 'bg-[#333]'
+                    }`}>⚙️</div>
+                    <div>
+                      <div className="text-[11px] font-bold">UI Designer (Lopaka)</div>
+                      <div className="text-[9px] opacity-60">Drag & drop watch components</div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-[9px] font-bold text-blue-400 uppercase tracking-[0.2em] mb-4">Resources</h3>
+                <div className="space-y-2">
+                  <button className="w-full text-left px-4 py-2 rounded-lg hover:bg-[#222] text-[#888] hover:text-white transition-all text-[11px] flex items-center gap-3">
+                    📚 Animation Library
+                    <span className="ml-auto text-[8px] bg-blue-500/20 text-blue-500 px-1.5 py-0.5 rounded font-black">SOON</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-auto p-6 border-t border-[#333] bg-[#111]">
+              <div className="text-[9px] text-[#444] font-bold uppercase mb-2">Developed By</div>
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-oled/20 border border-oled/30 flex items-center justify-center text-oled font-black">H</div>
+                <div>
+                  <div className="text-[11px] font-bold text-[#eee]">Hazzma</div>
+                  <div className="text-[9px] text-[#555]">v1.1.0-alpha</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
