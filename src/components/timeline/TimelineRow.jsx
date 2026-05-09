@@ -1,12 +1,22 @@
 import React from 'react';
+import { Link, Unlink } from 'lucide-react';
 
-const TimelineRow = ({ sprite, keyframes, totalFrames, currentFrame, isPlaying, onToggleKeyframe, onSetFrame }) => {
+const TimelineRow = ({ sprite, keyframes, totalFrames, currentFrame, isPlaying, onToggleKeyframe, onSetFrame, onToggleShapeLock }) => {
   return (
     <div className="h-8 border-b border-[#222] flex hover:bg-[#1f1f1f] transition-colors">
       {/* Sprite Info */}
-      <div className="w-40 border-r border-[#333] shrink-0 flex items-center px-3 gap-2 bg-[#1a1a1a]">
-        <div className="w-2 h-2 rounded-full bg-oled/50"></div>
-        <span className="text-[10px] text-[#aaa] truncate">{sprite.name}</span>
+      <div className="w-40 border-r border-[#333] shrink-0 flex items-center px-3 gap-2 bg-[#1a1a1a] justify-between">
+        <div className="flex items-center gap-2 overflow-hidden">
+          <div className="w-2 h-2 rounded-full bg-oled/50 shrink-0"></div>
+          <span className="text-[10px] text-[#aaa] truncate">{sprite.name}</span>
+        </div>
+        <button 
+          onClick={() => onToggleShapeLock(sprite.id)}
+          className={`p-1 rounded transition-colors shrink-0 ${sprite.shapeLocked ? 'text-oled bg-oled/10' : 'text-[#666] hover:text-white hover:bg-[#333]'}`}
+          title={sprite.shapeLocked ? "Shape Locked (Tweening Mode)" : "Shape Unlocked (Frame-by-Frame Mode)"}
+        >
+          {sprite.shapeLocked ? <Link size={10} /> : <Unlink size={10} />}
+        </button>
       </div>
 
       {/* Frame Cells */}

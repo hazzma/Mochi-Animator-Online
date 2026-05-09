@@ -32,16 +32,22 @@ export const generateCLibrary = (project) => {
   let totalProgmem = 0;
 
   // 1. Bitmaps Deduplication & Generation
-  sprites.forEach((sprite, sIdx) => {
-    const pixelKey = JSON.stringify(sprite.pixels);
-    if (!bitmaps.has(pixelKey)) {
-      const bmpName = `MOCHI_BMP_${sanitizeName(sprite.name)}_${sIdx}`;
-      const bytes = encodeBitmap(sprite.pixels, sprite.width, sprite.height);
-      bitmaps.set(pixelKey, { name: bmpName, bytes });
-      totalProgmem += bytes.length;
+  let bmpCounter = 0;
+  sprites.forEach((sprite) => {
+    for (let f = 0; f < meta.totalFrames; f++) {
+      const pos = getInterpolatedPosition(keyframes[sprite.id], f);
+      const currentPixels = (!sprite.shapeLocked && pos.pixels) ? pos.pixels : sprite.pixels;
+      const pixelKey = JSON.stringify(currentPixels);
+      
+      if (!bitmaps.has(pixelKey)) {
+        const bmpName = `MOCHI_BMP_${sanitizeName(sprite.name)}_${bmpCounter++}`;
+        const bytes = encodeBitmap(currentPixels, sprite.width, sprite.height);
+        bitmaps.set(pixelKey, { name: bmpName, bytes });
+        totalProgmem += bytes.length;
 
-      header += `// Sprite: ${sprite.name} (${sprite.width}x${sprite.height})\n`;
-      header += `static const uint8_t PROGMEM ${bmpName}[] = { ${bytes.map(b => '0x' + b.toString(16).padStart(2, '0')).join(', ')} };\n\n`;
+        header += `// Sprite: ${sprite.name} (Frame/Variant ${bmpCounter}) (${sprite.width}x${sprite.height})\n`;
+        header += `static const uint8_t PROGMEM ${bmpName}[] = { ${bytes.map(b => '0x' + b.toString(16).padStart(2, '0')).join(', ')} };\n\n`;
+      }
     }
   });
 
@@ -60,7 +66,8 @@ export const generateCLibrary = (project) => {
     source += `const MochiSprite ${layerVarName}[] = {\n`;
     for (let f = 0; f < meta.totalFrames; f++) {
       const pos = getInterpolatedPosition(keyframes[sprite.id], f);
-      const bmpInfo = bitmaps.get(JSON.stringify(sprite.pixels));
+      const currentPixels = (!sprite.shapeLocked && pos.pixels) ? pos.pixels : sprite.pixels;
+      const bmpInfo = bitmaps.get(JSON.stringify(currentPixels));
       
       source += `  { .x=${pos.x}, .y=${pos.y}, .w=${sprite.width}, .h=${sprite.height}, .bmp=${bmpInfo.name} }, // frame ${f}\n`;
     }

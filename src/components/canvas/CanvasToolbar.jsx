@@ -8,7 +8,7 @@ import {
 
 const CanvasToolbar = () => {
   const { project, setEditor, undo, redo } = useProjectStore();
-  const { activeTool, radius, zoom, onionSkin, showGrid } = project.editor;
+  const { activeTool, radius, zoom, onionSkin, showGrid, brushSize, brushShape } = project.editor;
   const [showHelp, setShowHelp] = React.useState(false);
 
   const tools = [
@@ -111,19 +111,51 @@ const CanvasToolbar = () => {
           </div>
         )}
         
-        <div className="flex items-center gap-3">
-          <div className="flex bg-[#222] rounded border border-[#333] overflow-hidden">
-            {[1, 2, 4, 8, 16].map(z => (
+        {/* Brush Settings (Pencil/Eraser) */}
+        {(activeTool === 'pencil' || activeTool === 'eraser') && (
+          <div className="flex items-center gap-4 animate-in slide-in-from-right-4 duration-300">
+            <div className="flex items-center gap-2">
+              <span className="text-[9px] font-bold text-[#555] uppercase tracking-widest">Size</span>
+              <input 
+                type="range" 
+                min="1" max="16" 
+                value={brushSize}
+                onChange={(e) => setEditor({ brushSize: Number(e.target.value) })}
+                className="w-20 accent-oled bg-[#333] h-1 rounded-lg appearance-none cursor-pointer"
+              />
+              <span className="text-[10px] text-oled font-mono w-4 text-center">{brushSize}</span>
+            </div>
+            <div className="flex items-center bg-[#222] rounded border border-[#333] overflow-hidden">
               <button
-                key={z}
-                onClick={() => setEditor({ zoom: z })}
-                className={`px-2 py-1 text-[9px] font-bold transition-all ${
-                  zoom === z ? 'bg-oled text-black' : 'text-[#666] hover:text-white'
-                }`}
+                onClick={() => setEditor({ brushShape: 'square' })}
+                className={`p-1.5 transition-all ${brushShape === 'square' ? 'bg-oled text-black' : 'text-[#666] hover:text-white'}`}
+                title="Square Brush"
               >
-                {z}x
+                <Square size={12} fill={brushShape === 'square' ? 'currentColor' : 'none'} />
               </button>
-            ))}
+              <button
+                onClick={() => setEditor({ brushShape: 'circle' })}
+                className={`p-1.5 transition-all ${brushShape === 'circle' ? 'bg-oled text-black' : 'text-[#666] hover:text-white'}`}
+                title="Circle Brush"
+              >
+                <Circle size={12} fill={brushShape === 'circle' ? 'currentColor' : 'none'} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Zoom Slider */}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-[9px] font-bold text-[#555] uppercase tracking-widest">Zoom</span>
+            <input 
+              type="range" 
+              min="1" max="32" step="0.5"
+              value={zoom}
+              onChange={(e) => setEditor({ zoom: Number(e.target.value) })}
+              className="w-24 accent-oled bg-[#333] h-1 rounded-lg appearance-none cursor-pointer"
+            />
+            <span className="text-[10px] text-oled font-mono w-8 text-right">{zoom}x</span>
           </div>
 
           <button 

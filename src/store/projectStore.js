@@ -25,6 +25,7 @@ const useProjectStore = create(
             name: "Main Layer",
             visible: true,
             locked: false,
+            shapeLocked: true,
             width: 128,
             height: 64,
             pixels: new Array(128 * 64).fill(false),
@@ -44,6 +45,8 @@ const useProjectStore = create(
           showGrid: true,
           radius: 4,
           onionSkin: false,
+          brushSize: 1,
+          brushShape: 'square', // 'square' | 'circle'
         }
       },
 
@@ -122,6 +125,7 @@ const useProjectStore = create(
             name,
             visible: true,
             locked: false,
+            shapeLocked: true,
             width,
             height,
             pixels: new Array(width * height).fill(false),
@@ -226,7 +230,31 @@ const useProjectStore = create(
         }
       })),
 
+      toggleShapeLock: (spriteId) => set((state) => ({
+        project: {
+          ...state.project,
+          sprites: state.project.sprites.map(s => 
+            s.id === spriteId ? { ...s, shapeLocked: s.shapeLocked === false ? true : false } : s
+          )
+        }
+      })),
+
       // Keyframe Actions
+      updateKeyframePixels: (spriteId, frameIndex, pixels) => {
+        set((state) => ({
+          project: {
+            ...state.project,
+            keyframes: {
+              ...state.project.keyframes,
+              [spriteId]: {
+                ...state.project.keyframes[spriteId],
+                [frameIndex]: { ...(state.project.keyframes[spriteId]?.[frameIndex] || { x: 0, y: 0, visible: true }), pixels }
+              }
+            }
+          }
+        }));
+      },
+
       setKeyframe: (spriteId, frameIndex, data) => {
         // Only record history if it's a significant change (not during drag, handled by dragEnd)
         set((state) => ({

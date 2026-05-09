@@ -6,7 +6,7 @@ import TimelineRow from './TimelineRow';
 import { getInterpolatedPosition } from '../../utils/tweenUtils';
 
 const Timeline = () => {
-  const { project, setKeyframe, deleteKeyframe, setCurrentFrame, togglePlay } = useProjectStore();
+  const { project, setKeyframe, deleteKeyframe, setCurrentFrame, togglePlay, setMeta, toggleShapeLock } = useProjectStore();
   const { meta, sprites, keyframes, editor } = project;
   const { isPlaying, currentFrame } = editor;
 
@@ -29,6 +29,7 @@ const Timeline = () => {
       <TimelineRuler 
         totalFrames={meta.totalFrames} 
         currentFrame={currentFrame}
+        fps={meta.fps}
         onSetFrame={setCurrentFrame}
       />
       
@@ -48,6 +49,7 @@ const Timeline = () => {
               isPlaying={isPlaying}
               onToggleKeyframe={handleToggleKeyframe}
               onSetFrame={setCurrentFrame}
+              onToggleShapeLock={toggleShapeLock}
             />
           ))
         )}
@@ -83,24 +85,37 @@ const Timeline = () => {
           </button>
         </div>
 
-        <div className="flex items-center gap-4 border-l border-[#333] pl-6">
-          <div className="flex items-center gap-2">
-            <span className="text-[9px] text-[#666] font-bold">TOTAL FRAMES</span>
+        <div className="flex items-center gap-6 border-l border-[#333] pl-6 flex-1 justify-end">
+          <div className="flex items-center gap-3 w-48">
+            <span className="text-[9px] text-[#888] font-bold whitespace-nowrap">DURATION (FRAMES)</span>
             <input 
-              type="number" 
-              className="w-12 bg-black border border-[#444] text-xs px-1 rounded text-oled"
+              type="range" 
+              min="1" max="200" step="1"
+              className="w-full accent-oled bg-[#333] h-1 rounded-lg appearance-none cursor-pointer"
               value={meta.totalFrames}
-              onChange={(e) => {/* Action for meta update */}}
+              onChange={(e) => setMeta({ totalFrames: Number(e.target.value) })}
+            />
+            <input 
+              type="number"
+              min="1" max="999"
+              className="w-12 bg-black border border-[#444] text-[10px] px-1 rounded text-oled font-mono text-center outline-none"
+              value={meta.totalFrames}
+              onChange={(e) => setMeta({ totalFrames: Math.max(1, Number(e.target.value)) })}
             />
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[9px] text-[#666] font-bold">FPS</span>
-            <input 
-              type="number" 
-              className="w-10 bg-black border border-[#444] text-xs px-1 rounded text-oled"
+          
+          <div className="flex items-center gap-2 bg-[#111] px-2 py-1 rounded border border-[#444]">
+            <span className="text-[9px] text-[#888] font-bold">FPS</span>
+            <select 
+              className="bg-transparent outline-none text-xs text-oled font-bold cursor-pointer"
               value={meta.fps}
-              onChange={(e) => {/* Action for meta update */}}
-            />
+              onChange={(e) => setMeta({ fps: Number(e.target.value) })}
+            >
+              <option value={12}>12 FPS</option>
+              <option value={24}>24 FPS</option>
+              <option value={30}>30 FPS</option>
+              <option value={60}>60 FPS</option>
+            </select>
           </div>
         </div>
       </div>

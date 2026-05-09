@@ -5,7 +5,7 @@ import { floodFill, drawRect, drawEllipse, drawRoundedRect } from '../../utils/c
 
 const PixelCanvas = () => {
   const canvasRef = useRef(null);
-  const { project, updateSpritePixels, setKeyframe, recordHistory } = useProjectStore();
+  const { project, updateSpritePixels, updateKeyframePixels, setKeyframe, recordHistory } = useProjectStore();
   const { meta, sprites, keyframes, editor } = project;
   const { currentFrame, zoom, showGrid, activeTool, selectedSpriteId, radius } = editor;
 
@@ -29,6 +29,24 @@ const PixelCanvas = () => {
     };
   }, []);
 
+  // Pinch to Zoom Listener
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const handleWheel = (e) => {
+      if (e.ctrlKey) {
+        e.preventDefault();
+        const zoomDelta = e.deltaY > 0 ? -0.5 : 0.5;
+        const currentZoom = useProjectStore.getState().project.editor.zoom;
+        useProjectStore.getState().setEditor({ 
+          zoom: Math.max(1, Math.min(32, currentZoom + zoomDelta)) 
+        });
+      }
+    };
+    canvas.addEventListener('wheel', handleWheel, { passive: false });
+    return () => canvas.removeEventListener('wheel', handleWheel);
+  }, []);
+
   // Main Render Logic
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -50,10 +68,12 @@ const PixelCanvas = () => {
           const pos = getInterpolatedPosition(keyframes[sprite.id], frame);
           if (!pos || !pos.visible) return;
           
+          const pixelsToRender = (!sprite.shapeLocked && pos.pixels) ? pos.pixels : sprite.pixels;
+          
           ctx.fillStyle = '#ffffff';
           for (let y = 0; y < sprite.height; y++) {
             for (let x = 0; x < sprite.width; x++) {
-              if (sprite.pixels[y * sprite.width + x]) {
+              if (pixelsToRender[y * sprite.width + x]) {
                 ctx.fillRect((pos.x + x) * zoom, (pos.y + y) * zoom, zoom, zoom);
               }
             }
@@ -70,12 +90,15 @@ const PixelCanvas = () => {
       const pos = getInterpolatedPosition(keyframes[sprite.id], currentFrame);
       if (!pos || !pos.visible) return;
 
+      // Determine which pixels to render
+      const pixelsToRender = (!sprite.shapeLocked && pos.pixels) ? pos.pixels : sprite.pixels;
+
       // Draw sprite pixels
       ctx.fillStyle = sprite.id === selectedSpriteId ? '#00FF41' : '#ffffff';
       
       for (let y = 0; y < sprite.height; y++) {
         for (let x = 0; x < sprite.width; x++) {
-          if (sprite.pixels[y * sprite.width + x]) {
+          if (pixelsToRender[y * sprite.width + x]) {
             ctx.fillRect(
               (pos.x + x) * zoom, 
               (pos.y + y) * zoom, 
@@ -253,40 +276,84 @@ const PixelCanvas = () => {
   };
 
   // Action Applications
-  const applyDraw = (x, y) => {
-    if (!selectedSprite || x < 0 || x >= selectedSprite.width || y < 0 || y >= selectedSprite.height) return;
-    const newPixels = [...selectedSprite.pixels];
-    const idx = y * selectedSprite.width + x;
+  const applyDraw = (cx, cy) => {
+    if (!selectedSprite) return;
+    const pos = getInterpolatedPosition(keyframes[selectedSpriteId], currentFrame);
+    const basePixels = (!selectedSprite.shapeLocked && pos.pixels) ? pos.pixels : selectedSprite.pixels;
+    const newPixels = [...basePixels];
     const value = activeTool === 'pencil';
-    if (newPixels[idx] !== value) {
-      newPixels[idx] = value;
-      updateSpritePixels(selectedSpriteId, newPixels);
+    const { brushSize = 1, brushShape = 'square' } = editor;
+
+    const r = Math.floor(brushSize / 2);
+    const isEven = brushSize % 2 === 0;
+    const offsetEnd = isEven ? r - 1 : r;
+    let changed = false;
+
+    for (let y = cy - r; y <= cy + offsetEnd; y++) {
+      for (let x = cx - r; x <= cx + offsetEnd; x++) {
+        if (x < 0 || x >= selectedSprite.width || y < 0 || y >= selectedSprite.height) continue;
+        
+        if (brushShape === 'circle' && brushSize > 2) {
+          const centerX = cx + (isEven ? -0.5 : 0);
+          const centerY = cy + (isEven ? -0.5 : 0);
+          const distSq = (x - centerX) ** 2 + (y - centerY) ** 2;
+          const maxDistSq = (brushSize / 2) ** 2;
+          if (distSq > maxDistSq) continue;
+        }
+
+        const idx = y * selectedSprite.width + x;
+        if (newPixels[idx] !== value) {
+          newPixels[idx] = value;
+          changed = true;
+        }
+      }
+    }
+    
+    if (changed) {
+      if (!selectedSprite.shapeLocked) {
+        updateKeyframePixels(selectedSpriteId, currentFrame, newPixels);
+      } else {
+        updateSpritePixels(selectedSpriteId, newPixels);
+      }
     }
   };
 
   const applyFill = (x, y) => {
     if (!selectedSprite || x < 0 || x >= selectedSprite.width || y < 0 || y >= selectedSprite.height) return;
-    const newPixels = floodFill(selectedSprite.pixels, selectedSprite.width, selectedSprite.height, x, y, true);
-    updateSpritePixels(selectedSpriteId, newPixels);
+    const pos = getInterpolatedPosition(keyframes[selectedSpriteId], currentFrame);
+    const basePixels = (!selectedSprite.shapeLocked && pos.pixels) ? pos.pixels : selectedSprite.pixels;
+    const newPixels = floodFill(basePixels, selectedSprite.width, selectedSprite.height, x, y, true);
+    if (!selectedSprite.shapeLocked) updateKeyframePixels(selectedSpriteId, currentFrame, newPixels);
+    else updateSpritePixels(selectedSpriteId, newPixels);
   };
 
   const applyRect = (x1, y1, x2, y2) => {
     if (!selectedSprite) return;
-    const newPixels = drawRect(selectedSprite.pixels, selectedSprite.width, selectedSprite.height, x1, y1, x2, y2, true);
-    updateSpritePixels(selectedSpriteId, newPixels);
+    const pos = getInterpolatedPosition(keyframes[selectedSpriteId], currentFrame);
+    const basePixels = (!selectedSprite.shapeLocked && pos.pixels) ? pos.pixels : selectedSprite.pixels;
+    const newPixels = drawRect(basePixels, selectedSprite.width, selectedSprite.height, x1, y1, x2, y2, true);
+    if (!selectedSprite.shapeLocked) updateKeyframePixels(selectedSpriteId, currentFrame, newPixels);
+    else updateSpritePixels(selectedSpriteId, newPixels);
   };
 
   const applyRoundedRect = (x1, y1, x2, y2) => {
     if (!selectedSprite) return;
-    const newPixels = drawRoundedRect(selectedSprite.pixels, selectedSprite.width, selectedSprite.height, x1, y1, x2, y2, radius, true);
-    updateSpritePixels(selectedSpriteId, newPixels);
+    const pos = getInterpolatedPosition(keyframes[selectedSpriteId], currentFrame);
+    const basePixels = (!selectedSprite.shapeLocked && pos.pixels) ? pos.pixels : selectedSprite.pixels;
+    const newPixels = drawRoundedRect(basePixels, selectedSprite.width, selectedSprite.height, x1, y1, x2, y2, radius, true);
+    if (!selectedSprite.shapeLocked) updateKeyframePixels(selectedSpriteId, currentFrame, newPixels);
+    else updateSpritePixels(selectedSpriteId, newPixels);
   };
 
   const applyEllipse = (x1, y1, x2, y2) => {
     if (!selectedSprite) return;
-    const newPixels = drawEllipse(selectedSprite.pixels, selectedSprite.width, selectedSprite.height, x1, y1, x2, y2, true);
-    updateSpritePixels(selectedSpriteId, newPixels);
+    const pos = getInterpolatedPosition(keyframes[selectedSpriteId], currentFrame);
+    const basePixels = (!selectedSprite.shapeLocked && pos.pixels) ? pos.pixels : selectedSprite.pixels;
+    const newPixels = drawEllipse(basePixels, selectedSprite.width, selectedSprite.height, x1, y1, x2, y2, true);
+    if (!selectedSprite.shapeLocked) updateKeyframePixels(selectedSpriteId, currentFrame, newPixels);
+    else updateSpritePixels(selectedSpriteId, newPixels);
   };
+
 
   return (
     <div className="relative group">
@@ -298,7 +365,7 @@ const PixelCanvas = () => {
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={() => { if (isDragging) handleMouseUp({ clientX: 0, clientY: 0 }); }}
-        className="cursor-crosshair block"
+        className="cursor-crosshair block border border-oled/50 shadow-[0_0_30px_rgba(0,255,65,0.15)] rounded-sm"
       />
     </div>
   );

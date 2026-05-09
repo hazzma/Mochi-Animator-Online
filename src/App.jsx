@@ -48,10 +48,10 @@ function App() {
 
       // Zoom Shortcuts (Ctrl + Arrow Up/Down)
       if (ctrl && e.key === 'ArrowUp') {
-        setEditor({ zoom: Math.min(project.editor.zoom + 1, 32) });
+        setEditor({ zoom: Math.min(project.editor.zoom + 0.5, 32) });
         e.preventDefault();
       } else if (ctrl && e.key === 'ArrowDown') {
-        setEditor({ zoom: Math.max(project.editor.zoom - 1, 1) });
+        setEditor({ zoom: Math.max(project.editor.zoom - 0.5, 1) });
         e.preventDefault();
       }
 
