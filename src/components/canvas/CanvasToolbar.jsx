@@ -59,7 +59,7 @@ const CanvasToolbar = () => {
               key={tool.id}
               onClick={() => {
                 if (currentMode === 'designer' && tool.id.startsWith('ui-')) {
-                  addComponent(selectedSpriteId, tool.id);
+                  addComponent(tool.id);
                 } else {
                   setEditor({ activeTool: tool.id });
                 }

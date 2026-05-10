@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Plus, Upload, Clock, Box, Trash2, ArrowRight } from 'lucide-react';
 import useProjectStore from '../../store/projectStore';
-import logoUrl from '../../assets/PCB LOGO.png';
+// import logoUrl from '../../assets/PCB LOGO.png';
+const logoUrl = "logo.svg";
 
 const Home = () => {
   const { loadProject, project: currentProject } = useProjectStore();
@@ -81,9 +82,9 @@ const Home = () => {
           <div className="relative group">
              <div className="absolute inset-0 bg-oled/10 blur-3xl group-hover:bg-oled/20 transition-all duration-500 rounded-full"></div>
              <img 
-               src={logoUrl} 
+               src="pcb_logo.png" 
                alt="Logo" 
-               className="w-40 h-40 relative invert brightness-200 object-contain drop-shadow-[0_0_15px_rgba(0,255,65,0.2)]" 
+               className="w-64 h-64 relative object-contain drop-shadow-[0_0_30px_rgba(0,255,65,0.3)] animate-in zoom-in duration-1000 scale-150" 
              />
           </div>
           <h1 className="mt-10 text-4xl font-black tracking-tighter uppercase italic">

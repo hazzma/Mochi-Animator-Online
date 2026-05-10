@@ -32,7 +32,15 @@ const LayerItem = ({ sprite, isSelected, onSelect, onToggleVisibility, onDelete,
   }, [sprite]);
 
   const handleRename = () => {
-    onRename(sprite.id, name);
+    if (name === sprite.name) {
+      setIsEditing(false);
+      return;
+    }
+    const result = onRename(sprite.id, name);
+    if (result?.error) {
+      alert(result.error);
+      setName(sprite.name);
+    }
     setIsEditing(false);
   };
 

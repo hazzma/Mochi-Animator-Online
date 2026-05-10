@@ -6,16 +6,19 @@ import LayerPanel from './components/layers/LayerPanel';
 import Timeline from './components/timeline/Timeline';
 import PreviewPanel from './components/preview/PreviewPanel';
 import ExportModal from './components/export/ExportModal';
+import AssetLibrary from './components/library/AssetLibrary';
+import { Sparkles } from 'lucide-react';
 import Home from './components/home/Home';
 import { Home as HomeIcon, Menu, X as CloseIcon } from 'lucide-react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import MiniPreview from './components/canvas/MiniPreview';
-import pcbLogo from './assets/PCB LOGO.png';
+import ComponentSettings from './components/designer/ComponentSettings';
 
 function App() {
-  const { project, screen, setScreen, undo, redo, setEditor, tickFrame, removeComponent } = useProjectStore();
+  const { project, screen, setScreen, undo, redo, setEditor, tickFrame, removeUISprite } = useProjectStore();
   const [showPreview, setShowPreview] = useState(false);
   const [showExport, setShowExport] = useState(false);
+  const [showLibrary, setShowLibrary] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
 
   // Animation Heartbeat
@@ -51,7 +54,7 @@ function App() {
       // Delete Shortcut
       if (e.key === 'Delete' || e.key === 'Backspace') {
         if (project.editor.selectedCompId) {
-          removeComponent(project.editor.selectedSpriteId, project.editor.selectedCompId);
+          removeUISprite(project.editor.selectedCompId);
           setEditor({ selectedCompId: null });
         }
       }
@@ -87,7 +90,7 @@ function App() {
 
     window.addEventListener('keydown', handleGlobalKeyDown, true);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown, true);
-  }, [undo, redo, setEditor, project.editor.zoom]);
+  }, [undo, redo, setEditor, project.editor.zoom, removeUISprite]);
 
   if (screen === 'home') {
     return <Home />;
@@ -107,9 +110,9 @@ function App() {
           <div className="w-[1px] h-4 bg-[#333] mx-1"></div>
           <button 
             onClick={() => setScreen('home')}
-            className="w-10 h-10 bg-white hover:bg-gray-100 rounded-lg flex items-center justify-center border border-[#333] transition-colors group overflow-hidden shadow-[0_0_15px_rgba(255,255,255,0.1)]"
+            className="w-12 h-10 bg-white hover:bg-gray-100 rounded-lg flex items-center justify-center border border-[#333] transition-colors group overflow-hidden shadow-[0_0_15px_rgba(255,255,255,0.1)]"
           >
-            <img src={pcbLogo} alt="Hazzma Logo" className="w-full h-full object-contain p-1 opacity-90 group-hover:opacity-100 transition-opacity" />
+            <img src="pcb_logo.png" alt="Hazzma Logo" className="w-full h-full object-contain p-0 scale-125 transition-transform group-hover:scale-[1.35]" />
           </button>
           <h1 className="font-semibold tracking-tight text-sm uppercase hidden md:block">
             Mochi <span className="text-oled">Animator</span>
@@ -157,24 +160,31 @@ function App() {
                 </div>
               </Panel>
               
-              <PanelResizeHandle className="h-1 bg-[#222] hover:bg-oled/50 transition-colors cursor-row-resize" />
-              
-              {/* Timeline Panel */}
-              <Panel defaultSize={30} minSize={10}>
-                <div className="h-full bg-[#111] overflow-hidden">
-                  <Timeline />
-                </div>
-              </Panel>
+              {/* Timeline Panel - Hide in Designer Mode */}
+              {project.editor.currentMode !== 'designer' && (
+                <>
+                  <PanelResizeHandle className="h-1 bg-[#222] hover:bg-oled/50 transition-colors cursor-row-resize" />
+                  <Panel defaultSize={30} minSize={10}>
+                    <div className="h-full bg-[#111] overflow-hidden">
+                      <Timeline />
+                    </div>
+                  </Panel>
+                </>
+              )}
               
             </PanelGroup>
           </Panel>
 
           <PanelResizeHandle className="w-1 bg-[#222] hover:bg-oled/50 transition-colors cursor-col-resize" />
 
-          {/* Right Sidebar (Layers) */}
+          {/* Right Sidebar (Layers or Component Settings) */}
           <Panel defaultSize={20} minSize={15}>
             <div className="h-full border-l border-[#333] bg-[#1a1a1a]">
-              <LayerPanel />
+              {project.editor.currentMode === 'designer' ? (
+                <ComponentSettings />
+              ) : (
+                <LayerPanel />
+              )}
             </div>
           </Panel>
           
@@ -183,12 +193,13 @@ function App() {
 
       {showPreview && <PreviewPanel onClose={() => setShowPreview(false)} />}
       {showExport && <ExportModal onClose={() => setShowExport(false)} />}
+      {showLibrary && <AssetLibrary onClose={() => setShowLibrary(false)} />}
 
       {/* Side Navigation Menu (Hamburger) */}
       {showMenu && (
         <>
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] animate-in fade-in duration-300" onClick={() => setShowMenu(false)} />
-          <div className="fixed inset-y-0 left-0 w-72 bg-[#1a1a1a] border-r border-[#333] z-[101] shadow-2xl animate-in slide-in-from-left duration-300 flex flex-col">
+          <div className="fixed inset-0 bg-black/20 z-[100]" onClick={() => setShowMenu(false)} />
+          <div className="fixed inset-y-0 left-0 w-72 bg-[#1a1a1a]/95 border-r border-[#333] z-[101] shadow-[10px_0_30px_rgba(0,0,0,0.5)] animate-in slide-in-from-left duration-300 flex flex-col">
             <div className="h-12 border-b border-[#333] flex items-center justify-between px-4 bg-[#222]">
               <span className="text-[10px] font-black uppercase tracking-widest text-[#666]">Navigation Menu</span>
               <button onClick={() => setShowMenu(false)} className="text-[#666] hover:text-white">
@@ -236,11 +247,14 @@ function App() {
               </div>
 
               <div>
-                <h3 className="text-[9px] font-bold text-blue-400 uppercase tracking-[0.2em] mb-4">Resources</h3>
+                <h3 className="text-[9px] font-bold text-oled uppercase tracking-[0.2em] mb-4">Content Library</h3>
                 <div className="space-y-2">
-                  <button className="w-full text-left px-4 py-2 rounded-lg hover:bg-[#222] text-[#888] hover:text-white transition-all text-[11px] flex items-center gap-3">
-                    📚 Animation Library
-                    <span className="ml-auto text-[8px] bg-blue-500/20 text-blue-500 px-1.5 py-0.5 rounded font-black">SOON</span>
+                  <button 
+                    onClick={() => { setShowLibrary(true); setShowMenu(false); }}
+                    className="w-full text-left px-4 py-2 rounded-lg hover:bg-[#222] text-[#888] hover:text-white transition-all text-[11px] flex items-center gap-3 group"
+                  >
+                    <Sparkles size={14} className="text-oled group-hover:scale-110 transition-transform" />
+                    Animation Library
                   </button>
                 </div>
               </div>

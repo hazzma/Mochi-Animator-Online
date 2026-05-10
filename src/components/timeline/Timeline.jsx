@@ -6,7 +6,7 @@ import TimelineRow from './TimelineRow';
 import { getInterpolatedPosition } from '../../utils/tweenUtils';
 
 const Timeline = () => {
-  const { project, setKeyframe, deleteKeyframe, setCurrentFrame, togglePlay, setMeta, toggleShapeLock } = useProjectStore();
+  const { project, setKeyframe, deleteKeyframe, setCurrentFrame, togglePlay, setMeta, toggleShapeLock, updateSpriteRange } = useProjectStore();
   const { meta, sprites, keyframes, editor } = project;
   const { isPlaying, currentFrame } = editor;
 
@@ -50,6 +50,7 @@ const Timeline = () => {
               onToggleKeyframe={handleToggleKeyframe}
               onSetFrame={setCurrentFrame}
               onToggleShapeLock={toggleShapeLock}
+              onUpdateRange={updateSpriteRange}
             />
           ))
         )}

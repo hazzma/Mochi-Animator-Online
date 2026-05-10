@@ -5,7 +5,19 @@ import { floodFill, drawRect, drawEllipse, drawRoundedRect } from '../../utils/c
 
 const PixelCanvas = () => {
   const canvasRef = useRef(null);
-  const { project, updateSpritePixels, updateKeyframePixels, updateComponent, setKeyframe, recordHistory } = useProjectStore();
+  const { 
+    project, 
+    updateSpritePixels, 
+    updateKeyframePixels, 
+    updateComponent, 
+    setKeyframe, 
+    recordHistory, 
+    removeUISprite, 
+    setEditor,
+    addSprite,
+    moveSpriteKeyframes,
+    resizeSprite
+  } = useProjectStore();
   const { meta, sprites, keyframes, editor } = project;
   const { currentFrame, zoom, showGrid, activeTool, selectedSpriteId, radius } = editor;
 
@@ -15,6 +27,9 @@ const PixelCanvas = () => {
   const [isShiftPressed, setIsShiftPressed] = useState(false);
   const [systemTime, setSystemTime] = useState(new Date());
   const [compDragOffset, setCompDragOffset] = useState({ x: 0, y: 0 });
+  const [isResizing, setIsResizing] = useState(false);
+  const [resizeHandle, setResizeHandle] = useState(null); // 'tl', 'tr', 'bl', 'br'
+  const [resizeSnapshot, setResizeSnapshot] = useState(null);
 
   // Clock Update
   useEffect(() => {
@@ -91,9 +106,50 @@ const PixelCanvas = () => {
       ctx.globalAlpha = 1.0;
     }
 
+    // ---------------------------------------------------------
+    // Step 3: Smartwatch Frame (Designer Mode Only)
+    // ---------------------------------------------------------
+    if (editor.currentMode === 'designer') {
+      ctx.save();
+      const framePadding = 40;
+      const cornerRadius = 30;
+      
+      // Outer Case
+      ctx.fillStyle = '#111';
+      ctx.shadowBlur = 40;
+      ctx.shadowColor = 'black';
+      
+      const fw = meta.canvasW * zoom + framePadding * 2;
+      const fh = meta.canvasH * zoom + framePadding * 2;
+      const fx = -framePadding;
+      const fy = -framePadding;
+      
+      // Draw rounded case
+      ctx.beginPath();
+      ctx.roundRect(fx, fy, fw, fh, cornerRadius);
+      ctx.fill();
+      
+      // Bezel
+      ctx.strokeStyle = '#222';
+      ctx.lineWidth = 4;
+      ctx.stroke();
+      
+      // Decorative Watch Buttons
+      ctx.fillStyle = '#333';
+      ctx.beginPath();
+      ctx.roundRect(fx + fw - 10, fy + fh * 0.2, 12, 30, 4); // Crown/Button
+      ctx.fill();
+      
+      ctx.restore();
+    }
+
     // Render all visible sprites
     sprites.forEach(sprite => {
       if (!sprite.visible) return;
+
+      const start = sprite.startFrame ?? 0;
+      const end = sprite.endFrame ?? (meta.totalFrames - 1);
+      if (currentFrame < start || currentFrame > end) return;
 
       const pos = getInterpolatedPosition(keyframes[sprite.id], currentFrame);
       if (!pos || !pos.visible) return;
@@ -116,12 +172,18 @@ const PixelCanvas = () => {
           }
         }
       }
-      }
 
       // ---------------------------------------------------------
-      // Step 3: Render UI Components (Lopaka Style)
+      // Step 3: Render UI Components & Virtual Pixel Bounding Box
       // ---------------------------------------------------------
-      sprite.uiComponents?.forEach(comp => {
+      const componentsToRender = sprite.uiComponents && sprite.uiComponents.length > 0 ? [...sprite.uiComponents] : [];
+      
+      // If it's a pixel layer and selected, inject a virtual component for the bounding box & delete button
+      if (componentsToRender.length === 0 && sprite.id === selectedSpriteId && (editor.currentMode === 'designer' || activeTool === 'move')) {
+         componentsToRender.push({ id: 'pixel_body', x: 0, y: 0, w: sprite.width, h: sprite.height, type: 'pixel_body' });
+      }
+
+      componentsToRender.forEach(comp => {
         ctx.save();
         const cx = (pos.x + comp.x) * zoom;
         const cy = (pos.y + comp.y) * zoom;
@@ -129,10 +191,40 @@ const PixelCanvas = () => {
         const ch = comp.h * zoom;
 
         // Selection highlight
-        if (sprite.id === selectedSpriteId) {
+        if (sprite.id === selectedSpriteId && (editor.selectedCompId === comp.id || comp.id === 'pixel_body')) {
+          ctx.strokeStyle = '#00FF41';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(cx - 1, cy - 1, cw + 2, ch + 2);
+          
+          // Draw Handles
+          ctx.fillStyle = '#ffffff';
+          const hs = 6; // handle size
+          ctx.fillRect(cx - hs/2, cy - hs/2, hs, hs); // TL
+          ctx.fillRect(cx + cw - hs/2, cy - hs/2, hs, hs); // TR
+          ctx.fillRect(cx - hs/2, cy + ch - hs/2, hs, hs); // BL
+          ctx.fillRect(cx + cw - hs/2, cy + ch - hs/2, hs, hs); // BR
+
+          // Delete Button (X) - Top Left slightly offset
+          ctx.fillStyle = '#ff4444';
+          ctx.beginPath();
+          ctx.arc(cx - 12, cy - 12, 10, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = 'white';
+          ctx.font = 'bold 12px Arial';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('×', cx - 12, cy - 11); // Better centering
+          ctx.textAlign = 'start'; // Reset
+          ctx.textBaseline = 'top'; // Reset
+        } else if (sprite.id === selectedSpriteId && comp.id !== 'pixel_body') {
           ctx.strokeStyle = 'rgba(0, 255, 65, 0.3)';
           ctx.lineWidth = 1;
           ctx.strokeRect(cx - 2, cy - 2, cw + 4, ch + 4);
+        }
+
+        if (comp.id === 'pixel_body') {
+           ctx.restore();
+           return; // Don't draw text/UI elements for pixel layers
         }
 
         ctx.fillStyle = sprite.id === selectedSpriteId ? '#00FF41' : '#ffffff';
@@ -165,7 +257,7 @@ const PixelCanvas = () => {
           ctx.fillRect(cx, cy, ch, ch); // Square placeholder
           ctx.font = `${ch * 0.6}px Arial`;
           ctx.fillStyle = 'black';
-          ctx.fillText('★', cx + 2, cy);
+          ctx.fillText('!', cx + 4, cy);
         }
         
         ctx.restore();
@@ -186,11 +278,11 @@ const PixelCanvas = () => {
     });
 
     // Main Workspace Border
-    ctx.strokeStyle = '#222';
+    ctx.strokeStyle = editor.currentMode === 'designer' ? '#000' : '#222';
     ctx.strokeRect(0, 0, meta.canvasW * zoom, meta.canvasH * zoom);
 
     // Render Grid
-    if (showGrid && zoom >= 4) {
+    if (showGrid && zoom >= 4 && editor.currentMode !== 'designer') {
       ctx.strokeStyle = '#111';
       ctx.lineWidth = 1;
       ctx.beginPath();
@@ -263,34 +355,109 @@ const PixelCanvas = () => {
     setCurrentPos({ x, y });
     setIsDragging(true);
 
-    // Designer Mode: Check for component selection
-    if (editor.currentMode === 'designer' && selectedSprite) {
-      const pos = getInterpolatedPosition(keyframes[selectedSpriteId], currentFrame);
-      const relX = x - pos.x;
-      const relY = y - pos.y;
+    // Check for component selection across ALL layers (Always active if tool is move/select or in designer)
+    if (editor.currentMode === 'designer' || activeTool === 'move') {
+      let hit = null;
+      
+      // Iterate through sprites in reverse (top to bottom)
+      [...sprites].reverse().forEach(s => {
+        if (hit || !s.visible) return;
+        const startF = s.startFrame ?? 0;
+        const endF = s.endFrame ?? (meta.totalFrames - 1);
+        if (currentFrame < startF || currentFrame > endF) return;
 
-      const hitComp = [...(selectedSprite.uiComponents || [])].reverse().find(c => 
-        relX >= c.x && relX <= c.x + c.w &&
-        relY >= c.y && relY <= c.y + c.h
-      );
+        const pos = getInterpolatedPosition(keyframes[s.id], currentFrame);
+        const relX = x - pos.x;
+        const relY = y - pos.y;
 
-      if (hitComp) {
-        setEditor({ selectedCompId: hitComp.id });
-        setCompDragOffset({ x: relX - hitComp.x, y: relY - hitComp.y });
-        return; // Don't proceed to pixel drawing
-      } else {
-        setEditor({ selectedCompId: null });
-      }
+        let comp = [...(s.uiComponents || [])].reverse().find(c => 
+          relX >= c.x - 12 && relX <= c.x + c.w + 12 &&
+          relY >= c.y - 12 && relY <= c.y + c.h + 12
+        );
+
+        // Virtual component hit detection for pixel layers
+        if (!comp && (!s.uiComponents || s.uiComponents.length === 0)) {
+           if (relX >= -12 && relX <= s.width + 12 && relY >= -12 && relY <= s.height + 12) {
+              comp = { id: 'pixel_body', x: 0, y: 0, w: s.width, h: s.height };
+           }
+        }
+
+        if (comp) {
+          const hs = 10 / zoom;
+          const hx = relX - comp.x;
+          const hy = relY - comp.y;
+
+          // Check Delete Button hit (cx - 12, cy - 12)
+          const distToDelete = Math.sqrt((relX - (comp.x - 12/zoom))**2 + (relY - (comp.y - 12/zoom))**2);
+          if ((editor.selectedCompId === comp.id || comp.id === 'pixel_body') && distToDelete < 15/zoom) { 
+            // If it's a UI component, we might want to just delete the component or the whole sprite?
+            // User requested delete button for layer, removeUISprite handles it.
+            removeUISprite(s.id);
+            setEditor({ selectedCompId: null, selectedSpriteId: null });
+            hit = true;
+            return;
+          }
+
+          // Check Resize Handles
+          if (editor.selectedCompId === comp.id || comp.id === 'pixel_body') {
+            if (Math.abs(hx) < hs && Math.abs(hy) < hs) { 
+               setIsResizing(true); setResizeHandle('tl'); hit = true; 
+               if (comp.id === 'pixel_body') setResizeSnapshot({ w: s.width, h: s.height, pixels: s.pixels, keyframes: keyframes[s.id] });
+               return; 
+            }
+            if (Math.abs(hx - comp.w) < hs && Math.abs(hy) < hs) { 
+               setIsResizing(true); setResizeHandle('tr'); hit = true; 
+               if (comp.id === 'pixel_body') setResizeSnapshot({ w: s.width, h: s.height, pixels: s.pixels, keyframes: keyframes[s.id] });
+               return; 
+            }
+            if (Math.abs(hx) < hs && Math.abs(hy - comp.h) < hs) { 
+               setIsResizing(true); setResizeHandle('bl'); hit = true; 
+               if (comp.id === 'pixel_body') setResizeSnapshot({ w: s.width, h: s.height, pixels: s.pixels, keyframes: keyframes[s.id] });
+               return; 
+            }
+            if (Math.abs(hx - comp.w) < hs && Math.abs(hy - comp.h) < hs) { 
+               setIsResizing(true); setResizeHandle('br'); hit = true; 
+               if (comp.id === 'pixel_body') setResizeSnapshot({ w: s.width, h: s.height, pixels: s.pixels, keyframes: keyframes[s.id] });
+               return; 
+            }
+          }
+
+          // If just clicking the body
+          setEditor({ selectedSpriteId: s.id, selectedCompId: comp.id });
+          setCompDragOffset({ x: relX - comp.x, y: relY - comp.y });
+          hit = true;
+        }
+      });
+
+      if (hit) return;
     }
 
-    if (activeTool === 'pencil' || activeTool === 'eraser' || activeTool === 'fill') {
+    if (activeTool === 'pencil' || activeTool === 'eraser' || activeTool === 'fill' || ['rect', 'ellipse', 'roundedRect'].includes(activeTool)) {
+      // Bug Fix: If drawing on a UI layer, automatically create a new PIXEL layer
+      const selectedSprite = sprites.find(s => s.id === selectedSpriteId);
+      if (selectedSprite && selectedSprite.uiComponents && selectedSprite.uiComponents.length > 0) {
+        const newName = `Layer ${sprites.length + 1}`;
+        addSprite(newName);
+        // addSprite is async in store update, but for immediate drawing we need to be careful.
+        // Actually, for simplicity, let's just alert or return for now, 
+        // but better is to switch to a pixel layer if one exists.
+        const pixelLayer = sprites.find(s => !s.uiComponents || s.uiComponents.length === 0);
+        if (pixelLayer) {
+          setEditor({ selectedSpriteId: pixelLayer.id });
+        } else {
+          // If no pixel layers at all, creating one is best
+          addSprite("New Drawing");
+          return; // Stop current click, user needs to click again on the new layer
+        }
+      }
+
       const pos = getInterpolatedPosition(keyframes[selectedSpriteId], currentFrame);
       const relX = x - pos.x;
       const relY = y - pos.y;
       
       if (activeTool === 'fill') {
         applyFill(relX, relY);
-      } else {
+      } else if (activeTool === 'pencil' || activeTool === 'eraser') {
         applyDraw(relX, relY);
       }
     }
@@ -301,14 +468,69 @@ const PixelCanvas = () => {
     const { x, y } = getPixelCoords(e);
     setCurrentPos({ x, y });
 
-    if (editor.selectedCompId) {
+    if (isResizing && editor.selectedCompId) {
       const pos = getInterpolatedPosition(keyframes[selectedSpriteId], currentFrame);
       const relX = x - pos.x;
       const relY = y - pos.y;
-      updateComponent(selectedSpriteId, editor.selectedCompId, {
-        x: relX - compDragOffset.x,
-        y: relY - compDragOffset.y
-      });
+      const sprite = sprites.find(s => s.id === selectedSpriteId);
+      
+      if (editor.selectedCompId === 'pixel_body' && resizeSnapshot) {
+         // Resizing pixel layer (Maintain Aspect Ratio)
+         let newW = Math.max(4, relX);
+         let newH = Math.round(newW * (resizeSnapshot.h / resizeSnapshot.w));
+         
+         // Only trigger update if dimensions actually changed to avoid over-rendering
+         if (newW !== sprite.width || newH !== sprite.height) {
+            resizeSprite(selectedSpriteId, newW, newH, resizeSnapshot);
+         }
+         return;
+      }
+
+      const comp = sprite.uiComponents.find(c => c.id === editor.selectedCompId);
+      
+      let newBox = { x: comp.x, y: comp.y, w: comp.w, h: comp.h };
+      
+      if (resizeHandle === 'br') {
+        newBox.w = Math.max(2, relX - comp.x);
+        newBox.h = Math.max(2, relY - comp.y);
+      } else if (resizeHandle === 'tl') {
+        newBox.w = Math.max(2, comp.w + (comp.x - relX));
+        newBox.h = Math.max(2, comp.h + (comp.y - relY));
+        newBox.x = relX;
+        newBox.y = relY;
+      } else if (resizeHandle === 'tr') {
+        newBox.w = Math.max(2, relX - comp.x);
+        newBox.h = Math.max(2, comp.h + (comp.y - relY));
+        newBox.y = relY;
+      } else if (resizeHandle === 'bl') {
+        newBox.w = Math.max(2, comp.w + (comp.x - relX));
+        newBox.h = Math.max(2, relY - comp.y);
+        newBox.x = relX;
+      }
+      
+      updateComponent(selectedSpriteId, editor.selectedCompId, newBox);
+      return;
+    }
+
+    if (editor.selectedCompId && !isResizing && (activeTool === 'move' || editor.currentMode === 'designer')) {
+      const pos = getInterpolatedPosition(keyframes[selectedSpriteId], currentFrame);
+      const relX = x - pos.x;
+      const relY = y - pos.y;
+      
+      if (editor.selectedCompId === 'pixel_body') {
+         // Move the entire sprite (all keyframes) to prevent snapping back
+         const dx = x - startPos.x;
+         const dy = y - startPos.y;
+         if (dx !== 0 || dy !== 0) {
+           moveSpriteKeyframes(selectedSpriteId, dx, dy);
+           setStartPos({ x, y });
+         }
+      } else {
+         updateComponent(selectedSpriteId, editor.selectedCompId, {
+           x: relX - compDragOffset.x,
+           y: relY - compDragOffset.y
+         });
+      }
       return;
     }
 
@@ -364,6 +586,9 @@ const PixelCanvas = () => {
     }
 
     setIsDragging(false);
+    setIsResizing(false);
+    setResizeHandle(null);
+    setResizeSnapshot(null);
     setStartPos(null);
     setCurrentPos(null);
   };
