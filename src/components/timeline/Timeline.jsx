@@ -9,6 +9,14 @@ const Timeline = () => {
   const { project, setKeyframe, deleteKeyframe, setCurrentFrame, togglePlay, setMeta, toggleShapeLock, updateSpriteRange } = useProjectStore();
   const { meta, sprites, keyframes, editor } = project;
   const { isPlaying, currentFrame } = editor;
+  const scrollContainerRef = React.useRef(null);
+
+  const handleWheel = (e) => {
+    if (e.shiftKey && scrollContainerRef.current) {
+      e.preventDefault();
+      scrollContainerRef.current.scrollLeft += e.deltaY;
+    }
+  };
 
   const handleToggleKeyframe = (spriteId, frameIndex) => {
     if (keyframes[spriteId]?.[frameIndex]) {
@@ -33,27 +41,33 @@ const Timeline = () => {
         onSetFrame={setCurrentFrame}
       />
       
-      <div className="flex-1 overflow-y-auto custom-scrollbar">
-        {sprites.length === 0 ? (
-          <div className="p-10 text-center text-[#444] text-[10px] font-bold uppercase tracking-widest">
-            Add layers to start animating.
-          </div>
-        ) : (
-          [...sprites].reverse().map(sprite => (
-            <TimelineRow
-              key={sprite.id}
-              sprite={sprite}
-              keyframes={keyframes[sprite.id]}
-              totalFrames={meta.totalFrames}
-              currentFrame={currentFrame}
-              isPlaying={isPlaying}
-              onToggleKeyframe={handleToggleKeyframe}
-              onSetFrame={setCurrentFrame}
-              onToggleShapeLock={toggleShapeLock}
-              onUpdateRange={updateSpriteRange}
-            />
-          ))
-        )}
+      <div 
+        ref={scrollContainerRef}
+        onWheel={handleWheel}
+        className="flex-1 overflow-y-auto overflow-x-auto custom-scrollbar"
+      >
+        <div className="min-w-max">
+          {sprites.length === 0 ? (
+            <div className="p-10 text-center text-[#444] text-[10px] font-bold uppercase tracking-widest">
+              Add layers to start animating.
+            </div>
+          ) : (
+            [...sprites].reverse().map(sprite => (
+              <TimelineRow
+                key={sprite.id}
+                sprite={sprite}
+                keyframes={keyframes[sprite.id]}
+                totalFrames={meta.totalFrames}
+                currentFrame={currentFrame}
+                isPlaying={isPlaying}
+                onToggleKeyframe={handleToggleKeyframe}
+                onSetFrame={setCurrentFrame}
+                onToggleShapeLock={toggleShapeLock}
+                onUpdateRange={updateSpriteRange}
+              />
+            ))
+          )}
+        </div>
       </div>
 
       {/* Playback Controls */}
@@ -84,6 +98,21 @@ const Timeline = () => {
           >
             <ChevronRight size={14} />
           </button>
+        </div>
+
+        {/* Global Scrubber */}
+        <div className="flex-1 flex items-center gap-4 px-2">
+           <span className="text-[10px] font-mono text-oled w-12 text-center bg-black/50 py-1 rounded border border-[#333]">
+              {currentFrame.toString().padStart(3, '0')}
+           </span>
+           <input 
+              type="range"
+              min="0"
+              max={meta.totalFrames - 1}
+              value={currentFrame}
+              onChange={(e) => setCurrentFrame(Number(e.target.value))}
+              className="flex-1 h-1 bg-[#333] accent-oled rounded-lg appearance-none cursor-pointer hover:bg-[#444] transition-colors"
+           />
         </div>
 
         <div className="flex items-center gap-6 border-l border-[#333] pl-6 flex-1 justify-end">
