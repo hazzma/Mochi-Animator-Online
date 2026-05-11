@@ -50,6 +50,7 @@ const useProjectStore = create(
           brushShape: 'square', // 'square' | 'circle'
           currentMode: 'animator', // 'animator' | 'designer'
           selectedCompId: null,
+          snappingEnabled: true,
         }
       },
 
@@ -202,6 +203,36 @@ const useProjectStore = create(
                 ...state.project.editor,
                 selectedSpriteId: id
               }
+            }
+          };
+        });
+      },
+
+      rotateSprite: (spriteId) => {
+        get().recordHistory();
+        set((state) => {
+          const sprite = state.project.sprites.find(s => s.id === spriteId);
+          if (!sprite) return state;
+
+          const oldW = sprite.width;
+          const oldH = sprite.height;
+          const oldPixels = sprite.pixels;
+          const newPixels = new Array(oldW * oldH).fill(false);
+
+          for (let y = 0; y < oldH; y++) {
+            for (let x = 0; x < oldW; x++) {
+              const newX = oldH - 1 - y;
+              const newY = x;
+              newPixels[newY * oldH + newX] = oldPixels[y * oldW + x];
+            }
+          }
+
+          return {
+            project: {
+              ...state.project,
+              sprites: state.project.sprites.map(s => 
+                s.id === spriteId ? { ...s, width: oldH, height: oldW, pixels: newPixels } : s
+              )
             }
           };
         });

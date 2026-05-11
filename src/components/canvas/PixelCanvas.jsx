@@ -30,6 +30,8 @@ const PixelCanvas = () => {
   const [isResizing, setIsResizing] = useState(false);
   const [resizeHandle, setResizeHandle] = useState(null); // 'tl', 'tr', 'bl', 'br'
   const [resizeSnapshot, setResizeSnapshot] = useState(null);
+  const [isRotating, setIsRotating] = useState(false);
+  const [snapGuides, setSnapGuides] = useState([]);
 
   // Clock Update
   useEffect(() => {
@@ -158,29 +160,45 @@ const PixelCanvas = () => {
       const pixelsToRender = (!sprite.shapeLocked && pos.pixels) ? pos.pixels : sprite.pixels;
 
       // Draw sprite pixels
+      ctx.save();
+      const centerX = (pos.x + sprite.width / 2) * zoom;
+      const centerY = (pos.y + sprite.height / 2) * zoom;
+      ctx.translate(centerX, centerY);
+      ctx.rotate((pos.rotation || 0) * Math.PI / 180);
+      ctx.translate(-centerX, -centerY);
+
       ctx.fillStyle = sprite.id === selectedSpriteId ? '#00FF41' : '#ffffff';
-      
       for (let y = 0; y < sprite.height; y++) {
         for (let x = 0; x < sprite.width; x++) {
           if (pixelsToRender[y * sprite.width + x]) {
-            ctx.fillRect(
-              (pos.x + x) * zoom, 
-              (pos.y + y) * zoom, 
-              zoom, 
-              zoom
-            );
+            ctx.fillRect((pos.x + x) * zoom, (pos.y + y) * zoom, zoom, zoom);
           }
         }
       }
+      ctx.restore();
 
       // ---------------------------------------------------------
       // Step 3: Render UI Components & Virtual Pixel Bounding Box
       // ---------------------------------------------------------
+      const getTightBounds = (pixels, w, h) => {
+        let minX = w, minY = h, maxX = -1, maxY = -1, hasContent = false;
+        for (let y = 0; y < h; y++) {
+          for (let x = 0; x < w; x++) {
+            if (pixels[y * w + x]) {
+              if (x < minX) minX = x; if (y < minY) minY = y;
+              if (x > maxX) maxX = x; if (y > maxY) maxY = y;
+              hasContent = true;
+            }
+          }
+        }
+        return hasContent ? { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 } : { x: 0, y: 0, w, h };
+      };
+
       const componentsToRender = sprite.uiComponents && sprite.uiComponents.length > 0 ? [...sprite.uiComponents] : [];
       
-      // If it's a pixel layer and selected, inject a virtual component for the bounding box & delete button
       if (componentsToRender.length === 0 && sprite.id === selectedSpriteId && (editor.currentMode === 'designer' || activeTool === 'move')) {
-         componentsToRender.push({ id: 'pixel_body', x: 0, y: 0, w: sprite.width, h: sprite.height, type: 'pixel_body' });
+         const bounds = getTightBounds(pixelsToRender, sprite.width, sprite.height);
+         componentsToRender.push({ id: 'pixel_body', x: bounds.x, y: bounds.y, w: bounds.w, h: bounds.h, type: 'pixel_body' });
       }
 
       componentsToRender.forEach(comp => {
@@ -204,18 +222,48 @@ const PixelCanvas = () => {
           ctx.fillRect(cx - hs/2, cy + ch - hs/2, hs, hs); // BL
           ctx.fillRect(cx + cw - hs/2, cy + ch - hs/2, hs, hs); // BR
 
-          // Delete Button (X) - Top Left slightly offset
+          // Rotation Handle (Top Center Stick)
+          if (comp.id === 'pixel_body') {
+            ctx.strokeStyle = '#00FF41';
+            ctx.beginPath();
+            ctx.moveTo(cx + cw/2, cy);
+            ctx.lineTo(cx + cw/2, cy - 20);
+            ctx.stroke();
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(cx + cw/2, cy - 20, 4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+
+            // Rotation label (angle) - Upright text
+            ctx.save();
+            ctx.translate(cx + cw/2, cy - 35);
+            ctx.rotate(-(pos.rotation || 0) * Math.PI / 180);
+            ctx.fillStyle = 'rgba(0,0,0,0.8)';
+            ctx.fillRect(-15, -10, 30, 15);
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 9px monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(`${Math.round(pos.rotation || 0)}°`, 0, -2);
+            ctx.restore();
+          }
+
+          // Delete Button (X) - Upright text
+          ctx.save();
+          ctx.translate(cx - 12, cy - 12);
+          ctx.rotate(-(pos.rotation || 0) * Math.PI / 180);
           ctx.fillStyle = '#ff4444';
           ctx.beginPath();
-          ctx.arc(cx - 12, cy - 12, 10, 0, Math.PI * 2);
+          ctx.arc(0, 0, 10, 0, Math.PI * 2);
           ctx.fill();
           ctx.fillStyle = 'white';
           ctx.font = 'bold 12px Arial';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText('×', cx - 12, cy - 11); // Better centering
-          ctx.textAlign = 'start'; // Reset
-          ctx.textBaseline = 'top'; // Reset
+          ctx.fillText('×', 0, 1);
+          ctx.restore();
+
         } else if (sprite.id === selectedSpriteId && comp.id !== 'pixel_body') {
           ctx.strokeStyle = 'rgba(0, 255, 65, 0.3)';
           ctx.lineWidth = 1;
@@ -323,8 +371,25 @@ const PixelCanvas = () => {
       ctx.strokeRect(px1, py1, pw, ph);
       ctx.setLineDash([]);
     }
+    
+    // Render Snap Guides (Magenta Canva-style)
+    if (snapGuides.length > 0) {
+      ctx.strokeStyle = '#ff00ff';
+      ctx.lineWidth = 1;
+      snapGuides.forEach(guide => {
+        ctx.beginPath();
+        if (guide.type === 'v') {
+          ctx.moveTo(guide.x * zoom, 0);
+          ctx.lineTo(guide.x * zoom, meta.canvasH * zoom);
+        } else {
+          ctx.moveTo(0, guide.y * zoom);
+          ctx.lineTo(meta.canvasW * zoom, guide.y * zoom);
+        }
+        ctx.stroke();
+      });
+    }
 
-  }, [sprites, keyframes, currentFrame, zoom, showGrid, selectedSpriteId, meta, isDragging, startPos, currentPos, isShiftPressed, activeTool, editor.onionSkin]);
+  }, [sprites, keyframes, currentFrame, zoom, showGrid, selectedSpriteId, meta, isDragging, startPos, currentPos, isShiftPressed, activeTool, editor.onionSkin, snapGuides]);
 
   // Interaction Logic
   const getPixelCoords = (e) => {
@@ -355,6 +420,19 @@ const PixelCanvas = () => {
     setCurrentPos({ x, y });
     setIsDragging(true);
 
+    // Helper for rotated hit detection
+    const getLocalCoords = (px, py, spriteX, spriteY, spriteW, spriteH, angleDeg) => {
+      const cx = spriteX + spriteW / 2;
+      const cy = spriteY + spriteH / 2;
+      const rad = -angleDeg * Math.PI / 180;
+      const dx = px - cx;
+      const dy = py - cy;
+      return {
+        x: (dx * Math.cos(rad) - dy * Math.sin(rad)) + cx,
+        y: (dx * Math.sin(rad) + dy * Math.cos(rad)) + cy
+      };
+    };
+
     // Check for component selection across ALL layers (Always active if tool is move/select or in designer)
     if (editor.currentMode === 'designer' || activeTool === 'move') {
       let hit = null;
@@ -367,8 +445,11 @@ const PixelCanvas = () => {
         if (currentFrame < startF || currentFrame > endF) return;
 
         const pos = getInterpolatedPosition(keyframes[s.id], currentFrame);
-        const relX = x - pos.x;
-        const relY = y - pos.y;
+        
+        // Transform mouse to local rotated space
+        const local = getLocalCoords(x, y, pos.x, pos.y, s.width, s.height, pos.rotation || 0);
+        const relX = local.x - pos.x;
+        const relY = local.y - pos.y;
 
         let comp = [...(s.uiComponents || [])].reverse().find(c => 
           relX >= c.x - 12 && relX <= c.x + c.w + 12 &&
@@ -390,10 +471,8 @@ const PixelCanvas = () => {
           // Check Delete Button hit (cx - 12, cy - 12)
           const distToDelete = Math.sqrt((relX - (comp.x - 12/zoom))**2 + (relY - (comp.y - 12/zoom))**2);
           if ((editor.selectedCompId === comp.id || comp.id === 'pixel_body') && distToDelete < 15/zoom) { 
-            // If it's a UI component, we might want to just delete the component or the whole sprite?
-            // User requested delete button for layer, removeUISprite handles it.
-            removeUISprite(s.id);
-            setEditor({ selectedCompId: null, selectedSpriteId: null });
+            // Instead of deleting the whole layer, just hide it at this keypoint
+            setKeyframe(s.id, currentFrame, { visible: false });
             hit = true;
             return;
           }
@@ -420,6 +499,16 @@ const PixelCanvas = () => {
                if (comp.id === 'pixel_body') setResizeSnapshot({ w: s.width, h: s.height, pixels: s.pixels, keyframes: keyframes[s.id] });
                return; 
             }
+          }
+
+          // Check Rotation Handle (above top center)
+          if (comp.id === 'pixel_body' && sprite.id === selectedSpriteId) {
+             const distToRot = Math.sqrt((relX - (comp.x + comp.w/2))**2 + (relY - (comp.y - 20/zoom))**2);
+             if (distToRot < 15/zoom) {
+                setIsRotating(true);
+                hit = true;
+                return;
+             }
           }
 
           // If just clicking the body
@@ -479,10 +568,22 @@ const PixelCanvas = () => {
          let newW = Math.max(4, relX);
          let newH = Math.round(newW * (resizeSnapshot.h / resizeSnapshot.w));
          
-         // Only trigger update if dimensions actually changed to avoid over-rendering
+         // Snapping for resize (to other objects)
+         const newGuides = [];
+         if (editor.snappingEnabled) {
+            sprites.forEach(s => {
+               if (s.id === selectedSpriteId || !s.visible) return;
+               const threshold = 4;
+               if (Math.abs(newW - s.width) < threshold) { newW = s.width; newH = Math.round(newW * (resizeSnapshot.h / resizeSnapshot.w)); }
+               if (Math.abs(newH - s.height) < threshold) { newH = s.height; newW = Math.round(newH * (resizeSnapshot.w / resizeSnapshot.h)); }
+            });
+         }
+
+         // Only trigger update if dimensions actually changed
          if (newW !== sprite.width || newH !== sprite.height) {
             resizeSprite(selectedSpriteId, newW, newH, resizeSnapshot);
          }
+         setSnapGuides(newGuides);
          return;
       }
 
@@ -519,12 +620,66 @@ const PixelCanvas = () => {
       
       if (editor.selectedCompId === 'pixel_body') {
          // Move the entire sprite (all keyframes) to prevent snapping back
-         const dx = x - startPos.x;
-         const dy = y - startPos.y;
-         if (dx !== 0 || dy !== 0) {
-           moveSpriteKeyframes(selectedSpriteId, dx, dy);
-           setStartPos({ x, y });
+         let dx = x - startPos.x;
+         let dy = y - startPos.y;
+         
+         const newGuides = [];
+         if (editor.snappingEnabled) {
+           const sprite = sprites.find(s => s.id === selectedSpriteId);
+           const pos = getInterpolatedPosition(keyframes[selectedSpriteId], currentFrame);
+           let finalX = pos.x + dx;
+           let finalY = pos.y + dy;
+           const threshold = 4;
+
+           // Alignment Candidates (Canvas Center)
+           const targetsX = [{ val: meta.canvasW / 2, label: 'center' }];
+           const targetsY = [{ val: meta.canvasH / 2, label: 'center' }];
+
+           // Other Sprites
+           sprites.forEach(s => {
+             if (s.id === selectedSpriteId || !s.visible) return;
+             const sPos = getInterpolatedPosition(keyframes[s.id], currentFrame);
+             targetsX.push({ val: sPos.x, label: 'edge' }, { val: sPos.x + s.width / 2, label: 'center' }, { val: sPos.x + s.width, label: 'edge' });
+             targetsY.push({ val: sPos.y, label: 'edge' }, { val: sPos.y + s.height / 2, label: 'center' }, { val: sPos.y + s.height, label: 'edge' });
+           });
+
+           // Snap X
+           const snapPointsX = [finalX, finalX + sprite.width / 2, finalX + sprite.width];
+           snapPointsX.forEach((p, i) => {
+             targetsX.forEach(t => {
+               if (Math.abs(p - t.val) < threshold) {
+                 const diff = t.val - p;
+                 finalX += diff;
+                 dx += diff;
+                 newGuides.push({ x: t.val, type: 'v' });
+               }
+             });
+           });
+
+           // Snap Y
+           const snapPointsY = [finalY, finalY + sprite.height / 2, finalY + sprite.height];
+           snapPointsY.forEach((p, i) => {
+             targetsY.forEach(t => {
+               if (Math.abs(p - t.val) < threshold) {
+                 const diff = t.val - p;
+                 finalY += diff;
+                 dy += diff;
+                 newGuides.push({ y: t.val, type: 'h' });
+               }
+             });
+           });
          }
+
+         if (dx !== 0 || dy !== 0) {
+            const pos = getInterpolatedPosition(keyframes[selectedSpriteId], currentFrame);
+            setKeyframe(selectedSpriteId, currentFrame, { 
+              x: pos.x + dx, 
+              y: pos.y + dy,
+              visible: true
+            });
+            setStartPos({ x, y });
+         }
+         setSnapGuides(newGuides);
       } else {
          updateComponent(selectedSpriteId, editor.selectedCompId, {
            x: relX - compDragOffset.x,
@@ -532,6 +687,24 @@ const PixelCanvas = () => {
          });
       }
       return;
+    }
+
+    if (isRotating && selectedSpriteId) {
+       const sprite = sprites.find(s => s.id === selectedSpriteId);
+       const pos = getInterpolatedPosition(keyframes[selectedSpriteId], currentFrame);
+       const centerX = pos.x + sprite.width / 2;
+       const centerY = pos.y + sprite.height / 2;
+       
+       let angle = Math.atan2(y - centerY, x - centerX) * 180 / Math.PI;
+       angle += 90; // Offset to make top handle 0 degrees
+
+       if (editor.snappingEnabled) {
+          const snap = 15;
+          angle = Math.round(angle / snap) * snap;
+       }
+
+       setKeyframe(selectedSpriteId, currentFrame, { rotation: angle });
+       return;
     }
 
     if (activeTool === 'move') {
@@ -587,8 +760,10 @@ const PixelCanvas = () => {
 
     setIsDragging(false);
     setIsResizing(false);
+    setIsRotating(false);
     setResizeHandle(null);
     setResizeSnapshot(null);
+    setSnapGuides([]);
     setStartPos(null);
     setCurrentPos(null);
   };

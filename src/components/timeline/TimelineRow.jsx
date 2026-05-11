@@ -106,24 +106,30 @@ const TimelineRow = ({ sprite, keyframes, totalFrames, currentFrame, isPlaying, 
           
           return (
             <div
-              key={i}
-              onClick={() => onSetFrame(i)}
-              onDoubleClick={() => onToggleKeyframe(sprite.id, i)}
-              className={`w-6 h-full shrink-0 border-r border-[#222] flex items-center justify-center relative cursor-pointer z-10 ${
-                currentFrame === i ? 'bg-white/5' : ''
-              } ${isOutsideRange ? 'opacity-30 diagonal-stripes' : ''}`}
-            >
-              {hasKeyframe && (
-                <div 
-                  className={`w-2.5 h-2.5 rotate-45 border transform transition-all hover:scale-125 ${
-                    currentFrame === i 
-                      ? 'bg-oled border-white shadow-[0_0_10px_#00FF41] z-10' 
-                      : 'bg-[#444] border-[#666] opacity-60'
-                  } ${isPlaying && currentFrame === i ? 'animate-pulse' : ''}`}
-                  title={`Frame ${i}: X:${keyframes[i].x} Y:${keyframes[i].y}`}
-                />
-              )}
-            </div>
+               key={i}
+               onClick={() => onSetFrame(i)}
+               onDoubleClick={() => {
+                 if (!hasKeyframe) onToggleKeyframe(sprite.id, i);
+               }}
+               className={`w-6 h-full shrink-0 border-r border-[#222] flex items-center justify-center relative cursor-pointer z-10 ${
+                 currentFrame === i ? 'bg-white/5' : ''
+               } ${isOutsideRange ? 'opacity-30 diagonal-stripes' : ''}`}
+             >
+               {hasKeyframe && (
+                 <div 
+                   onClick={(e) => {
+                     e.stopPropagation();
+                     onToggleKeyframe(sprite.id, i);
+                   }}
+                   className={`w-2.5 h-2.5 rotate-45 border transform transition-all hover:scale-125 hover:bg-red-500 hover:border-red-400 group-hover:block ${
+                     currentFrame === i 
+                       ? 'bg-oled border-white shadow-[0_0_10px_#00FF41] z-10' 
+                       : 'bg-[#444] border-[#666] opacity-60'
+                   } ${isPlaying && currentFrame === i ? 'animate-pulse' : ''}`}
+                   title={`Frame ${i}: Click to delete keypoint`}
+                 />
+               )}
+             </div>
           );
         })}
       </div>

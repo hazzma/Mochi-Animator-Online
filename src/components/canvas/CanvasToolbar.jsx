@@ -4,16 +4,18 @@ import {
   Pencil, Eraser, PaintBucket, Square, Circle,
   MousePointer2, Undo2, Redo2, Layers,
   Settings2, Grid3X3, HelpCircle, X,
-  Clock, Type, Activity, BarChart3, Image as ImageIcon
+  Clock, Type, Activity, BarChart3, Image as ImageIcon,
+  Magnet, RotateCw
 } from 'lucide-react';
 
 const CanvasToolbar = () => {
-  const { project, setEditor, undo, redo, addComponent } = useProjectStore();
-  const { activeTool, radius, zoom, onionSkin, showGrid, brushSize, brushShape, currentMode, selectedSpriteId } = project.editor;
+  const { project, setEditor, undo, redo, addComponent, rotateSprite } = useProjectStore();
+    const { activeTool, radius, zoom, onionSkin, showGrid, brushSize, brushShape, currentMode, selectedSpriteId, snappingEnabled } = project.editor;
   const [showHelp, setShowHelp] = React.useState(false);
 
   const tools = [
     { id: 'move', icon: MousePointer2, label: 'Move Tool', desc: 'Select and move layers. Creating multiple points on the timeline will automatically animate the motion.', shortcut: 'V or Ctrl+S' },
+    { id: 'rotate', icon: RotateCw, label: 'Rotate', desc: 'Rotate 90° clockwise.', shortcut: 'Shift+R' },
     { id: 'pencil', icon: Pencil, label: 'Pencil', desc: 'Draw pixels. Shared across all frames in this layer.', shortcut: 'P or B' },
     { id: 'eraser', icon: Eraser, label: 'Eraser', desc: 'Remove pixels.', shortcut: 'E' },
     { id: 'fill', icon: PaintBucket, label: 'Fill', desc: 'Flood fill area with pixels.', shortcut: 'F' },
@@ -58,6 +60,10 @@ const CanvasToolbar = () => {
             <button
               key={tool.id}
               onClick={() => {
+                if (tool.id === 'rotate') {
+                  rotateSprite(selectedSpriteId);
+                  return;
+                }
                 if (currentMode === 'designer' && tool.id.startsWith('ui-')) {
                   addComponent(tool.id);
                 } else {
@@ -107,6 +113,19 @@ const CanvasToolbar = () => {
             <Grid3X3 size={18} />
             <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-2 py-1 bg-black text-white text-[10px] rounded opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 border border-[#333] font-bold uppercase tracking-wider">
               Toggle Grid
+            </div>
+          </button>
+          <button
+            onClick={() => setEditor({ snappingEnabled: !snappingEnabled })}
+            className={`p-2 rounded flex items-center justify-center transition-all group relative ${
+              snappingEnabled 
+                ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' 
+                : 'text-[#666] hover:bg-[#222] hover:text-[#999]'
+            }`}
+          >
+            <Magnet size={18} />
+            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-2 py-1 bg-black text-white text-[10px] rounded opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 border border-[#333] font-bold uppercase tracking-wider">
+              Smart Snapping (Canva-style)
             </div>
           </button>
         </div>
@@ -213,27 +232,30 @@ const CanvasToolbar = () => {
               </section>
               <section className="space-y-8">
                 <div>
-                  <h3 className="text-blue-400 text-xs font-bold uppercase mb-4 tracking-widest">Animation (Tweening)</h3>
+                  <h3 className="text-blue-400 text-xs font-bold uppercase mb-4 tracking-widest">Animation (Keypoints)</h3>
                   <div className="bg-[#0a0a0a] border border-blue-500/20 p-4 rounded-xl">
                     <p className="text-[10px] text-[#aaa] leading-relaxed mb-3">
                       To create motion like <strong>KineMaster</strong>:
                     </p>
                     <ol className="text-[10px] text-[#888] space-y-2 list-decimal list-inside">
                       <li>Select a layer (sprite).</li>
-                      <li>Go to Frame 0 and move the layer.</li>
-                      <li>Go to Frame 10 and move the layer again.</li>
-                      <li>The editor will automatically generate the movement in between!</li>
+                      <li>Move the layer to create the 1st <strong>Keypoint</strong>.</li>
+                      <li>Go to another frame and move it again for the 2nd point.</li>
+                      <li><strong>To Delete:</strong> Click the diamond dot on the timeline or use the "Delete Keypoint" button.</li>
                     </ol>
                   </div>
                 </div>
                 <div>
-                  <h3 className="text-oled text-xs font-bold uppercase mb-4 tracking-widest">Global Shortcuts</h3>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="text-[10px] text-[#666] bg-black/40 p-2 rounded border border-[#222]"><span className="text-[#aaa] font-bold">Ctrl + Z</span> Undo</div>
-                    <div className="text-[10px] text-[#666] bg-black/40 p-2 rounded border border-[#222]"><span className="text-[#aaa] font-bold">Ctrl + Y</span> Redo</div>
-                    <div className="text-[10px] text-[#666] bg-black/40 p-2 rounded border border-[#222]"><span className="text-[#aaa] font-bold">Ctrl + ↑</span> Zoom In</div>
-                    <div className="text-[10px] text-[#666] bg-black/40 p-2 rounded border border-[#222]"><span className="text-[#aaa] font-bold">Ctrl + ↓</span> Zoom Out</div>
-                    <div className="text-[10px] text-[#666] bg-black/40 p-2 rounded border border-[#222]"><span className="text-[#aaa] font-bold">Hold Shift</span> Proportional</div>
+                  <h3 className="text-purple-400 text-xs font-bold uppercase mb-4 tracking-widest">Smart Guides (Magnet)</h3>
+                  <div className="bg-[#0a0a0a] border border-purple-500/20 p-4 rounded-xl">
+                    <p className="text-[10px] text-[#aaa] leading-relaxed mb-3">
+                      Align objects perfectly like in <strong>Canva</strong>:
+                    </p>
+                    <ul className="text-[10px] text-[#888] space-y-2 list-disc list-inside">
+                      <li>Toggle the <strong>Magnet</strong> icon to enable/disable.</li>
+                      <li>Magenta lines appear when centered or aligned with other objects.</li>
+                      <li>Resizing will "snap" to match the size of other objects.</li>
+                    </ul>
                   </div>
                 </div>
               </section>

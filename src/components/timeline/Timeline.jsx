@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Pause, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Play, Pause, ChevronLeft, ChevronRight, Trash2, PlusCircle } from 'lucide-react';
 import useProjectStore from '../../store/projectStore';
 import TimelineRuler from './TimelineRuler';
 import TimelineRow from './TimelineRow';
@@ -39,6 +39,16 @@ const Timeline = () => {
         currentFrame={currentFrame}
         fps={meta.fps}
         onSetFrame={setCurrentFrame}
+        onAddKeypoint={(frame) => {
+          if (!editor.selectedSpriteId) return;
+          const pos = getInterpolatedPosition(keyframes[editor.selectedSpriteId], frame);
+          setKeyframe(editor.selectedSpriteId, frame, { 
+            x: pos.x, 
+            y: pos.y, 
+            rotation: pos.rotation || 0, 
+            visible: true 
+          });
+        }}
       />
       
       <div 
@@ -113,6 +123,32 @@ const Timeline = () => {
               onChange={(e) => setCurrentFrame(Number(e.target.value))}
               className="flex-1 h-1 bg-[#333] accent-oled rounded-lg appearance-none cursor-pointer hover:bg-[#444] transition-colors"
            />
+        </div>
+
+        {/* Keypoint Actions (Add/Delete) */}
+        <div className="flex items-center gap-2 border-l border-[#333] pl-4">
+           {keyframes[editor.selectedSpriteId]?.[currentFrame] ? (
+             <button 
+                onClick={() => deleteKeyframe(editor.selectedSpriteId, currentFrame)}
+                className="flex items-center gap-2 px-3 h-7 rounded text-[9px] font-bold uppercase transition-all border bg-red-500/10 text-red-500 border-red-500/30 hover:bg-red-500/20"
+                title="Delete Keypoint at current frame"
+             >
+                <Trash2 size={12} />
+                Delete Keypoint
+             </button>
+           ) : (
+             <button 
+                onClick={() => {
+                  const pos = getInterpolatedPosition(keyframes[editor.selectedSpriteId], currentFrame);
+                  setKeyframe(editor.selectedSpriteId, currentFrame, { x: pos.x, y: pos.y, visible: true });
+                }}
+                className="flex items-center gap-2 px-3 h-7 rounded text-[9px] font-bold uppercase transition-all border bg-oled/10 text-oled border-oled/30 hover:bg-oled/20"
+                title="Add Keypoint at current frame"
+             >
+                <PlusCircle size={12} />
+                Add Keypoint
+             </button>
+           )}
         </div>
 
         <div className="flex items-center gap-6 border-l border-[#333] pl-6 flex-1 justify-end">
