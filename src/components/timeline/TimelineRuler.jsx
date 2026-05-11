@@ -1,6 +1,6 @@
 import React from 'react';
 
-const TimelineRuler = ({ totalFrames, currentFrame, fps = 12, onSetFrame, onAddKeypoint }) => {
+const TimelineRuler = ({ totalFrames, currentFrame, fps = 12, onSetFrame }) => {
   return (
     <div className="h-8 border-b border-[#333] bg-[#222] flex sticky top-0 z-10">
       {/* Spacer for row names */}
@@ -17,7 +17,6 @@ const TimelineRuler = ({ totalFrames, currentFrame, fps = 12, onSetFrame, onAddK
             <div
               key={i}
               onClick={() => onSetFrame(i)}
-              onDoubleClick={() => onAddKeypoint && onAddKeypoint(i)}
               className={`w-6 h-full shrink-0 border-r border-[#333]/50 flex flex-col items-center justify-center text-[8px] cursor-pointer hover:bg-[#333] transition-colors ${
                 currentFrame === i ? 'bg-oled/20 text-oled font-bold' : 'text-[#666]'
               }`}

@@ -52,7 +52,6 @@ export const getInterpolatedPosition = (keyframesForSprite, frameIndex) => {
   return {
     x: Math.round(p1.x + (p2.x - p1.x) * t),
     y: Math.round(p1.y + (p2.y - p1.y) * t),
-    rotation: p1.rotation + (p2.rotation - p1.rotation) * t || 0,
     visible: p1.visible !== false, // Default to true
     pixels: p1.pixels // Pass along custom frame pixels if they exist
   };

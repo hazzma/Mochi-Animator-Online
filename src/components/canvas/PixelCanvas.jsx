@@ -30,7 +30,6 @@ const PixelCanvas = () => {
   const [isResizing, setIsResizing] = useState(false);
   const [resizeHandle, setResizeHandle] = useState(null); // 'tl', 'tr', 'bl', 'br'
   const [resizeSnapshot, setResizeSnapshot] = useState(null);
-  const [isRotating, setIsRotating] = useState(false);
   const [snapGuides, setSnapGuides] = useState([]);
 
   // Clock Update
@@ -160,22 +159,20 @@ const PixelCanvas = () => {
       const pixelsToRender = (!sprite.shapeLocked && pos.pixels) ? pos.pixels : sprite.pixels;
 
       // Draw sprite pixels
-      ctx.save();
-      const centerX = (pos.x + sprite.width / 2) * zoom;
-      const centerY = (pos.y + sprite.height / 2) * zoom;
-      ctx.translate(centerX, centerY);
-      ctx.rotate((pos.rotation || 0) * Math.PI / 180);
-      ctx.translate(-centerX, -centerY);
-
       ctx.fillStyle = sprite.id === selectedSpriteId ? '#00FF41' : '#ffffff';
+      
       for (let y = 0; y < sprite.height; y++) {
         for (let x = 0; x < sprite.width; x++) {
           if (pixelsToRender[y * sprite.width + x]) {
-            ctx.fillRect((pos.x + x) * zoom, (pos.y + y) * zoom, zoom, zoom);
+            ctx.fillRect(
+              (pos.x + x) * zoom, 
+              (pos.y + y) * zoom, 
+              zoom, 
+              zoom
+            );
           }
         }
       }
-      ctx.restore();
 
       // ---------------------------------------------------------
       // Step 3: Render UI Components & Virtual Pixel Bounding Box
@@ -222,48 +219,18 @@ const PixelCanvas = () => {
           ctx.fillRect(cx - hs/2, cy + ch - hs/2, hs, hs); // BL
           ctx.fillRect(cx + cw - hs/2, cy + ch - hs/2, hs, hs); // BR
 
-          // Rotation Handle (Top Center Stick)
-          if (comp.id === 'pixel_body') {
-            ctx.strokeStyle = '#00FF41';
-            ctx.beginPath();
-            ctx.moveTo(cx + cw/2, cy);
-            ctx.lineTo(cx + cw/2, cy - 20);
-            ctx.stroke();
-            ctx.fillStyle = '#ffffff';
-            ctx.beginPath();
-            ctx.arc(cx + cw/2, cy - 20, 4, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.stroke();
-
-            // Rotation label (angle) - Upright text
-            ctx.save();
-            ctx.translate(cx + cw/2, cy - 35);
-            ctx.rotate(-(pos.rotation || 0) * Math.PI / 180);
-            ctx.fillStyle = 'rgba(0,0,0,0.8)';
-            ctx.fillRect(-15, -10, 30, 15);
-            ctx.fillStyle = 'white';
-            ctx.font = 'bold 9px monospace';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(`${Math.round(pos.rotation || 0)}°`, 0, -2);
-            ctx.restore();
-          }
-
-          // Delete Button (X) - Upright text
-          ctx.save();
-          ctx.translate(cx - 12, cy - 12);
-          ctx.rotate(-(pos.rotation || 0) * Math.PI / 180);
+          // Delete Button (X) - Top Left slightly offset
           ctx.fillStyle = '#ff4444';
           ctx.beginPath();
-          ctx.arc(0, 0, 10, 0, Math.PI * 2);
+          ctx.arc(cx - 12, cy - 12, 10, 0, Math.PI * 2);
           ctx.fill();
           ctx.fillStyle = 'white';
           ctx.font = 'bold 12px Arial';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText('×', 0, 1);
-          ctx.restore();
-
+          ctx.fillText('×', cx - 12, cy - 11); // Better centering
+          ctx.textAlign = 'start'; // Reset
+          ctx.textBaseline = 'top'; // Reset
         } else if (sprite.id === selectedSpriteId && comp.id !== 'pixel_body') {
           ctx.strokeStyle = 'rgba(0, 255, 65, 0.3)';
           ctx.lineWidth = 1;
@@ -420,19 +387,6 @@ const PixelCanvas = () => {
     setCurrentPos({ x, y });
     setIsDragging(true);
 
-    // Helper for rotated hit detection
-    const getLocalCoords = (px, py, spriteX, spriteY, spriteW, spriteH, angleDeg) => {
-      const cx = spriteX + spriteW / 2;
-      const cy = spriteY + spriteH / 2;
-      const rad = -angleDeg * Math.PI / 180;
-      const dx = px - cx;
-      const dy = py - cy;
-      return {
-        x: (dx * Math.cos(rad) - dy * Math.sin(rad)) + cx,
-        y: (dx * Math.sin(rad) + dy * Math.cos(rad)) + cy
-      };
-    };
-
     // Check for component selection across ALL layers (Always active if tool is move/select or in designer)
     if (editor.currentMode === 'designer' || activeTool === 'move') {
       let hit = null;
@@ -445,11 +399,8 @@ const PixelCanvas = () => {
         if (currentFrame < startF || currentFrame > endF) return;
 
         const pos = getInterpolatedPosition(keyframes[s.id], currentFrame);
-        
-        // Transform mouse to local rotated space
-        const local = getLocalCoords(x, y, pos.x, pos.y, s.width, s.height, pos.rotation || 0);
-        const relX = local.x - pos.x;
-        const relY = local.y - pos.y;
+        const relX = x - pos.x;
+        const relY = y - pos.y;
 
         let comp = [...(s.uiComponents || [])].reverse().find(c => 
           relX >= c.x - 12 && relX <= c.x + c.w + 12 &&
@@ -471,8 +422,10 @@ const PixelCanvas = () => {
           // Check Delete Button hit (cx - 12, cy - 12)
           const distToDelete = Math.sqrt((relX - (comp.x - 12/zoom))**2 + (relY - (comp.y - 12/zoom))**2);
           if ((editor.selectedCompId === comp.id || comp.id === 'pixel_body') && distToDelete < 15/zoom) { 
-            // Instead of deleting the whole layer, just hide it at this keypoint
-            setKeyframe(s.id, currentFrame, { visible: false });
+            // If it's a UI component, we might want to just delete the component or the whole sprite?
+            // User requested delete button for layer, removeUISprite handles it.
+            removeUISprite(s.id);
+            setEditor({ selectedCompId: null, selectedSpriteId: null });
             hit = true;
             return;
           }
@@ -499,16 +452,6 @@ const PixelCanvas = () => {
                if (comp.id === 'pixel_body') setResizeSnapshot({ w: s.width, h: s.height, pixels: s.pixels, keyframes: keyframes[s.id] });
                return; 
             }
-          }
-
-          // Check Rotation Handle (above top center)
-          if (comp.id === 'pixel_body' && sprite.id === selectedSpriteId) {
-             const distToRot = Math.sqrt((relX - (comp.x + comp.w/2))**2 + (relY - (comp.y - 20/zoom))**2);
-             if (distToRot < 15/zoom) {
-                setIsRotating(true);
-                hit = true;
-                return;
-             }
           }
 
           // If just clicking the body
@@ -671,13 +614,8 @@ const PixelCanvas = () => {
          }
 
          if (dx !== 0 || dy !== 0) {
-            const pos = getInterpolatedPosition(keyframes[selectedSpriteId], currentFrame);
-            setKeyframe(selectedSpriteId, currentFrame, { 
-              x: pos.x + dx, 
-              y: pos.y + dy,
-              visible: true
-            });
-            setStartPos({ x, y });
+           moveSpriteKeyframes(selectedSpriteId, dx, dy);
+           setStartPos({ x, y });
          }
          setSnapGuides(newGuides);
       } else {
@@ -687,24 +625,6 @@ const PixelCanvas = () => {
          });
       }
       return;
-    }
-
-    if (isRotating && selectedSpriteId) {
-       const sprite = sprites.find(s => s.id === selectedSpriteId);
-       const pos = getInterpolatedPosition(keyframes[selectedSpriteId], currentFrame);
-       const centerX = pos.x + sprite.width / 2;
-       const centerY = pos.y + sprite.height / 2;
-       
-       let angle = Math.atan2(y - centerY, x - centerX) * 180 / Math.PI;
-       angle += 90; // Offset to make top handle 0 degrees
-
-       if (editor.snappingEnabled) {
-          const snap = 15;
-          angle = Math.round(angle / snap) * snap;
-       }
-
-       setKeyframe(selectedSpriteId, currentFrame, { rotation: angle });
-       return;
     }
 
     if (activeTool === 'move') {
@@ -760,7 +680,6 @@ const PixelCanvas = () => {
 
     setIsDragging(false);
     setIsResizing(false);
-    setIsRotating(false);
     setResizeHandle(null);
     setResizeSnapshot(null);
     setSnapGuides([]);

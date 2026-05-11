@@ -6,7 +6,7 @@ import TimelineRow from './TimelineRow';
 import { getInterpolatedPosition } from '../../utils/tweenUtils';
 
 const Timeline = () => {
-  const { project, setKeyframe, deleteKeyframe, setCurrentFrame, togglePlay, setMeta, toggleShapeLock, updateSpriteRange, addGlobalKeyframe, deleteGlobalKeyframe } = useProjectStore();
+  const { project, setKeyframe, deleteKeyframe, setCurrentFrame, togglePlay, setMeta, toggleShapeLock, updateSpriteRange } = useProjectStore();
   const { meta, sprites, keyframes, editor } = project;
   const { isPlaying, currentFrame } = editor;
   const scrollContainerRef = React.useRef(null);
@@ -39,16 +39,6 @@ const Timeline = () => {
         currentFrame={currentFrame}
         fps={meta.fps}
         onSetFrame={setCurrentFrame}
-        onAddKeypoint={(frame) => {
-          if (!editor.selectedSpriteId) return;
-          const pos = getInterpolatedPosition(keyframes[editor.selectedSpriteId], frame);
-          setKeyframe(editor.selectedSpriteId, frame, { 
-            x: pos.x, 
-            y: pos.y, 
-            rotation: pos.rotation || 0, 
-            visible: true 
-          });
-        }}
       />
       
       <div 
@@ -127,22 +117,28 @@ const Timeline = () => {
 
         {/* Keypoint Actions (Add/Delete) */}
         <div className="flex items-center gap-2 border-l border-[#333] pl-4">
-           <button 
-              onClick={() => addGlobalKeyframe(currentFrame)}
-              className="flex items-center gap-2 px-3 h-7 rounded text-[9px] font-bold uppercase transition-all border bg-oled/10 text-oled border-oled/30 hover:bg-oled/20 shadow-[0_0_10px_rgba(0,255,65,0.1)]"
-              title="Add Keypoint for ALL layers at current frame"
-           >
-              <PlusCircle size={12} />
-              Add Global
-           </button>
-           <button 
-              onClick={() => deleteGlobalKeyframe(currentFrame)}
-              className="flex items-center gap-2 px-3 h-7 rounded text-[9px] font-bold uppercase transition-all border bg-red-500/10 text-red-500 border-red-500/30 hover:bg-red-500/20"
-              title="Delete Keypoint for ALL layers at current frame"
-           >
-              <Trash2 size={12} />
-              Delete Global
-           </button>
+           {keyframes[editor.selectedSpriteId]?.[currentFrame] ? (
+             <button 
+                onClick={() => deleteKeyframe(editor.selectedSpriteId, currentFrame)}
+                className="flex items-center gap-2 px-3 h-7 rounded text-[9px] font-bold uppercase transition-all border bg-red-500/10 text-red-500 border-red-500/30 hover:bg-red-500/20"
+                title="Delete Keypoint at current frame"
+             >
+                <Trash2 size={12} />
+                Delete Keypoint
+             </button>
+           ) : (
+             <button 
+                onClick={() => {
+                  const pos = getInterpolatedPosition(keyframes[editor.selectedSpriteId], currentFrame);
+                  setKeyframe(editor.selectedSpriteId, currentFrame, { x: pos.x, y: pos.y, visible: true });
+                }}
+                className="flex items-center gap-2 px-3 h-7 rounded text-[9px] font-bold uppercase transition-all border bg-oled/10 text-oled border-oled/30 hover:bg-oled/20"
+                title="Add Keypoint at current frame"
+             >
+                <PlusCircle size={12} />
+                Add Keypoint
+             </button>
+           )}
         </div>
 
         <div className="flex items-center gap-6 border-l border-[#333] pl-6 flex-1 justify-end">

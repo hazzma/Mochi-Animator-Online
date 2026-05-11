@@ -591,51 +591,6 @@ const useProjectStore = create(
         });
       },
 
-      addGlobalKeyframe: (frameIndex) => {
-        get().recordHistory();
-        set((state) => {
-          const newKeyframes = { ...state.project.keyframes };
-          state.project.sprites.forEach(sprite => {
-            const pos = getInterpolatedPosition(state.project.keyframes[sprite.id], frameIndex);
-            newKeyframes[sprite.id] = {
-              ...(newKeyframes[sprite.id] || {}),
-              [frameIndex]: { 
-                x: pos.x, 
-                y: pos.y, 
-                rotation: pos.rotation || 0, 
-                visible: pos.visible !== false 
-              }
-            };
-          });
-          return {
-            project: {
-              ...state.project,
-              keyframes: newKeyframes
-            }
-          };
-        });
-      },
-
-      deleteGlobalKeyframe: (frameIndex) => {
-        get().recordHistory();
-        set((state) => {
-          const newKeyframes = { ...state.project.keyframes };
-          state.project.sprites.forEach(sprite => {
-            if (newKeyframes[sprite.id]) {
-              const spriteKfs = { ...newKeyframes[sprite.id] };
-              delete spriteKfs[frameIndex];
-              newKeyframes[sprite.id] = spriteKfs;
-            }
-          });
-          return {
-            project: {
-              ...state.project,
-              keyframes: newKeyframes
-            }
-          };
-        });
-      },
-
       setCurrentFrame: (frame) => set((state) => ({
         project: {
           ...state.project,
