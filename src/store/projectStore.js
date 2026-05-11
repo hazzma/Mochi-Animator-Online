@@ -217,10 +217,12 @@ const useProjectStore = create(
           const oldW = sprite.width;
           const oldH = sprite.height;
           const oldPixels = sprite.pixels;
-          const newPixels = new Array(oldW * oldH).fill(false);
+          // After 90° CW rotation: new dims are (oldH x oldW)
+          const newPixels = new Array(oldH * oldW).fill(false);
 
           for (let y = 0; y < oldH; y++) {
             for (let x = 0; x < oldW; x++) {
+              // 90° CW: new(x, y) = old(oldH-1-y, x) in new grid of (oldH cols x oldW rows)
               const newX = oldH - 1 - y;
               const newY = x;
               newPixels[newY * oldH + newX] = oldPixels[y * oldW + x];

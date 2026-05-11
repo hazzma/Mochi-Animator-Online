@@ -562,62 +562,54 @@ const PixelCanvas = () => {
       const relY = y - pos.y;
       
       if (editor.selectedCompId === 'pixel_body') {
-         // Move the entire sprite (all keyframes) to prevent snapping back
-         let dx = x - startPos.x;
-         let dy = y - startPos.y;
+         const dx = x - startPos.x;
+         const dy = y - startPos.y;
          
-         const newGuides = [];
-         if (editor.snappingEnabled) {
-           const sprite = sprites.find(s => s.id === selectedSpriteId);
-           const pos = getInterpolatedPosition(keyframes[selectedSpriteId], currentFrame);
-           let finalX = pos.x + dx;
-           let finalY = pos.y + dy;
-           const threshold = 4;
-
-           // Alignment Candidates (Canvas Center)
-           const targetsX = [{ val: meta.canvasW / 2, label: 'center' }];
-           const targetsY = [{ val: meta.canvasH / 2, label: 'center' }];
-
-           // Other Sprites
-           sprites.forEach(s => {
-             if (s.id === selectedSpriteId || !s.visible) return;
-             const sPos = getInterpolatedPosition(keyframes[s.id], currentFrame);
-             targetsX.push({ val: sPos.x, label: 'edge' }, { val: sPos.x + s.width / 2, label: 'center' }, { val: sPos.x + s.width, label: 'edge' });
-             targetsY.push({ val: sPos.y, label: 'edge' }, { val: sPos.y + s.height / 2, label: 'center' }, { val: sPos.y + s.height, label: 'edge' });
-           });
-
-           // Snap X
-           const snapPointsX = [finalX, finalX + sprite.width / 2, finalX + sprite.width];
-           snapPointsX.forEach((p, i) => {
-             targetsX.forEach(t => {
-               if (Math.abs(p - t.val) < threshold) {
-                 const diff = t.val - p;
-                 finalX += diff;
-                 dx += diff;
-                 newGuides.push({ x: t.val, type: 'v' });
-               }
-             });
-           });
-
-           // Snap Y
-           const snapPointsY = [finalY, finalY + sprite.height / 2, finalY + sprite.height];
-           snapPointsY.forEach((p, i) => {
-             targetsY.forEach(t => {
-               if (Math.abs(p - t.val) < threshold) {
-                 const diff = t.val - p;
-                 finalY += diff;
-                 dy += diff;
-                 newGuides.push({ y: t.val, type: 'h' });
-               }
-             });
-           });
-         }
-
          if (dx !== 0 || dy !== 0) {
-           moveSpriteKeyframes(selectedSpriteId, dx, dy);
+           // FIXED: Only move the current frame's keyframe, not ALL keyframes
+           // This prevents blink animation keyframes from getting shifted out of bounds
+           const pos = getInterpolatedPosition(keyframes[selectedSpriteId], currentFrame);
+           const newX = pos.x + dx;
+           const newY = pos.y + dy;
+
+           const newGuides = [];
+           let snappedX = newX;
+           let snappedY = newY;
+
+           if (editor.snappingEnabled) {
+             const sprite = sprites.find(s => s.id === selectedSpriteId);
+             // Use tight bounds to find the true visual center
+             const getTightBoundsSnap = (pixels, w, h) => {
+               let minX = w, minY = h, maxX = -1, maxY = -1, has = false;
+               for (let iy = 0; iy < h; iy++) for (let ix = 0; ix < w; ix++) if (pixels[iy * w + ix]) { if (ix < minX) minX = ix; if (iy < minY) minY = iy; if (ix > maxX) maxX = ix; if (iy > maxY) maxY = iy; has = true; }
+               return has ? { cx: newX + minX + (maxX - minX) / 2, cy: newY + minY + (maxY - minY) / 2, x: newX + minX, y: newY + minY, r: newX + maxX + 1, b: newY + maxY + 1 } : { cx: newX + w/2, cy: newY + h/2, x: newX, y: newY, r: newX+w, b: newY+h };
+             };
+             const pixelsToSnap = sprite.pixels;
+             const tb = getTightBoundsSnap(pixelsToSnap, sprite.width, sprite.height);
+             const threshold = 4;
+
+             // Snap center X to canvas center
+             if (Math.abs(tb.cx - meta.canvasW / 2) < threshold) { snappedX += (meta.canvasW / 2 - tb.cx); newGuides.push({ x: meta.canvasW / 2, type: 'v' }); }
+             // Snap center Y to canvas center
+             if (Math.abs(tb.cy - meta.canvasH / 2) < threshold) { snappedY += (meta.canvasH / 2 - tb.cy); newGuides.push({ y: meta.canvasH / 2, type: 'h' }); }
+
+             // Snap to other sprites
+             sprites.forEach(s => {
+               if (s.id === selectedSpriteId || !s.visible) return;
+               const sPos = getInterpolatedPosition(keyframes[s.id], currentFrame);
+               // Align left edges, right edges, centers X
+               if (Math.abs(tb.x - sPos.x) < threshold) { snappedX += sPos.x - tb.x; newGuides.push({ x: sPos.x, type: 'v' }); }
+               if (Math.abs(tb.r - (sPos.x + s.width)) < threshold) { snappedX += (sPos.x + s.width) - tb.r; newGuides.push({ x: sPos.x + s.width, type: 'v' }); }
+               // Align top edges, bottom edges, centers Y
+               if (Math.abs(tb.y - sPos.y) < threshold) { snappedY += sPos.y - tb.y; newGuides.push({ y: sPos.y, type: 'h' }); }
+               if (Math.abs(tb.b - (sPos.y + s.height)) < threshold) { snappedY += (sPos.y + s.height) - tb.b; newGuides.push({ y: sPos.y + s.height, type: 'h' }); }
+             });
+           }
+
+           setKeyframe(selectedSpriteId, currentFrame, { x: snappedX, y: snappedY, visible: true });
            setStartPos({ x, y });
+           setSnapGuides(newGuides);
          }
-         setSnapGuides(newGuides);
       } else {
          updateComponent(selectedSpriteId, editor.selectedCompId, {
            x: relX - compDragOffset.x,
