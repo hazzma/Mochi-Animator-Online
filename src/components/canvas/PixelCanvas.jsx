@@ -194,8 +194,15 @@ const PixelCanvas = () => {
       const componentsToRender = sprite.uiComponents && sprite.uiComponents.length > 0 ? [...sprite.uiComponents] : [];
       
       if (componentsToRender.length === 0 && sprite.id === selectedSpriteId && (editor.currentMode === 'designer' || activeTool === 'move')) {
+         // Use tight bounds for the VISUAL selection box
          const bounds = getTightBounds(pixelsToRender, sprite.width, sprite.height);
-         componentsToRender.push({ id: 'pixel_body', x: bounds.x, y: bounds.y, w: bounds.w, h: bounds.h, type: 'pixel_body' });
+         // Store full dims too so resize math works correctly
+         componentsToRender.push({ 
+           id: 'pixel_body', 
+           x: bounds.x, y: bounds.y, w: bounds.w, h: bounds.h,
+           fullX: 0, fullY: 0, fullW: sprite.width, fullH: sprite.height,
+           type: 'pixel_body' 
+         });
       }
 
       componentsToRender.forEach(comp => {
@@ -277,19 +284,7 @@ const PixelCanvas = () => {
         
         ctx.restore();
       });
-
-      // Subtle outline for selected sprite boundary
-      if (sprite.id === selectedSpriteId) {
-        ctx.strokeStyle = activeTool === 'move' ? '#00FF41' : '#444'; 
-        ctx.setLineDash(activeTool === 'move' ? [] : [2, 2]);
-        ctx.strokeRect(
-          pos.x * zoom, 
-          pos.y * zoom, 
-          sprite.width * zoom, 
-          sprite.height * zoom
-        );
-        ctx.setLineDash([]);
-      }
+      // No outer bounding box — tight box already drawn above
     });
 
     // Main Workspace Border
@@ -407,9 +402,10 @@ const PixelCanvas = () => {
           relY >= c.y - 12 && relY <= c.y + c.h + 12
         );
 
-        // Virtual component hit detection for pixel layers
+        // Virtual component hit detection for pixel layers - use FULL sprite dims for hit area
         if (!comp && (!s.uiComponents || s.uiComponents.length === 0)) {
            if (relX >= -12 && relX <= s.width + 12 && relY >= -12 && relY <= s.height + 12) {
+              // Store full dims so resize handle math is correct
               comp = { id: 'pixel_body', x: 0, y: 0, w: s.width, h: s.height };
            }
         }
