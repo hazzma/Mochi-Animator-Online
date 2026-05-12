@@ -26,6 +26,7 @@ const useProjectStore = create(
             visible: true,
             locked: false,
             shapeLocked: true,
+            rotation: 0,
             width: 128,
             height: 64,
             pixels: new Array(128 * 64).fill(false),
@@ -130,6 +131,7 @@ const useProjectStore = create(
             visible: true,
             locked: false,
             shapeLocked: true,
+            rotation: 0,
             width,
             height,
             pixels: new Array(width * height).fill(false),
@@ -206,6 +208,17 @@ const useProjectStore = create(
             }
           };
         });
+      },
+
+      setSpriteRotation: (spriteId, rotation) => {
+        set((state) => ({
+          project: {
+            ...state.project,
+            sprites: state.project.sprites.map(s =>
+              s.id === spriteId ? { ...s, rotation } : s
+            )
+          }
+        }));
       },
 
       rotateSprite: (spriteId) => {

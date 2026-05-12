@@ -158,7 +158,16 @@ const PixelCanvas = () => {
       // Determine which pixels to render
       const pixelsToRender = (!sprite.shapeLocked && pos.pixels) ? pos.pixels : sprite.pixels;
 
-      // Draw sprite pixels
+      // Draw sprite pixels (with rotation)
+      const spriteRotRad = ((sprite.rotation ?? 0) * Math.PI) / 180;
+      const spriteCenterX = (pos.x + sprite.width / 2) * zoom;
+      const spriteCenterY = (pos.y + sprite.height / 2) * zoom;
+
+      ctx.save();
+      ctx.translate(spriteCenterX, spriteCenterY);
+      ctx.rotate(spriteRotRad);
+      ctx.translate(-spriteCenterX, -spriteCenterY);
+
       ctx.fillStyle = sprite.id === selectedSpriteId ? '#00FF41' : '#ffffff';
       
       for (let y = 0; y < sprite.height; y++) {
@@ -173,6 +182,7 @@ const PixelCanvas = () => {
           }
         }
       }
+      ctx.restore();
 
       // ---------------------------------------------------------
       // Step 3: Render UI Components & Virtual Pixel Bounding Box
@@ -382,10 +392,23 @@ const PixelCanvas = () => {
     setCurrentPos({ x, y });
     setIsDragging(true);
 
-    // Check for component selection across ALL layers (Always active if tool is move/select or in designer)
+    // Check for component selection across ALL layers
     if (editor.currentMode === 'designer' || activeTool === 'move') {
       let hit = null;
       
+      // Helper: compute tight bounds of actual drawn pixels
+      const calcTightBounds = (pixels, w, h) => {
+        let minX = w, minY = h, maxX = -1, maxY = -1, has = false;
+        for (let py = 0; py < h; py++)
+          for (let px2 = 0; px2 < w; px2++)
+            if (pixels[py * w + px2]) {
+              if (px2 < minX) minX = px2; if (py < minY) minY = py;
+              if (px2 > maxX) maxX = px2; if (py > maxY) maxY = py;
+              has = true;
+            }
+        return has ? { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 } : { x: 0, y: 0, w, h };
+      };
+
       // Iterate through sprites in reverse (top to bottom)
       [...sprites].reverse().forEach(s => {
         if (hit || !s.visible) return;
@@ -397,60 +420,83 @@ const PixelCanvas = () => {
         const relX = x - pos.x;
         const relY = y - pos.y;
 
+        // --- UI Components ---
         let comp = [...(s.uiComponents || [])].reverse().find(c => 
-          relX >= c.x - 12 && relX <= c.x + c.w + 12 &&
-          relY >= c.y - 12 && relY <= c.y + c.h + 12
+          relX >= c.x - 8 && relX <= c.x + c.w + 8 &&
+          relY >= c.y - 8 && relY <= c.y + c.h + 8
         );
 
-        // Virtual component hit detection for pixel layers - use FULL sprite dims for hit area
+        // --- Pixel Body: use TIGHT BOUNDS so you must click ON the drawing ---
         if (!comp && (!s.uiComponents || s.uiComponents.length === 0)) {
-           if (relX >= -12 && relX <= s.width + 12 && relY >= -12 && relY <= s.height + 12) {
-              // Store full dims so resize handle math is correct
-              comp = { id: 'pixel_body', x: 0, y: 0, w: s.width, h: s.height };
-           }
+          const pixSrc = (!s.shapeLocked && keyframes[s.id]?.[currentFrame]?.pixels)
+            ? keyframes[s.id][currentFrame].pixels
+            : s.pixels;
+          const tb = calcTightBounds(pixSrc, s.width, s.height);
+          const hs = Math.max(4, 8 / zoom); // handle size in pixel coords
+          // Hit if within tight bounds + handle tolerance
+          if (relX >= tb.x - hs && relX <= tb.x + tb.w + hs &&
+              relY >= tb.y - hs && relY <= tb.y + tb.h + hs) {
+            // comp stores tight bounds; also store full dims for resize snapshot
+            comp = { id: 'pixel_body', x: tb.x, y: tb.y, w: tb.w, h: tb.h, spriteW: s.width, spriteH: s.height };
+          }
         }
 
         if (comp) {
-          const hs = 10 / zoom;
+          const hs = Math.max(4, 8 / zoom);
           const hx = relX - comp.x;
           const hy = relY - comp.y;
 
-          // Check Delete Button hit (cx - 12, cy - 12)
-          const distToDelete = Math.sqrt((relX - (comp.x - 12/zoom))**2 + (relY - (comp.y - 12/zoom))**2);
-          if ((editor.selectedCompId === comp.id || comp.id === 'pixel_body') && distToDelete < 15/zoom) { 
-            // If it's a UI component, we might want to just delete the component or the whole sprite?
-            // User requested delete button for layer, removeUISprite handles it.
-            removeUISprite(s.id);
-            setEditor({ selectedCompId: null, selectedSpriteId: null });
-            hit = true;
-            return;
+          // --- Delete Button (drawn at tight-bounds TL, -12px in screen) ---
+          if (comp.id === 'pixel_body') {
+            const delPx = comp.x - 12 / zoom;
+            const delPy = comp.y - 12 / zoom;
+            const distToDelete = Math.sqrt((relX - delPx) ** 2 + (relY - delPy) ** 2);
+            if (distToDelete < 12 / zoom) {
+              removeUISprite(s.id);
+              setEditor({ selectedCompId: null, selectedSpriteId: null });
+              hit = true;
+              return;
+            }
+          } else {
+            // UI comp delete
+            const distToDelete = Math.sqrt((relX - (comp.x - 12/zoom))**2 + (relY - (comp.y - 12/zoom))**2);
+            if (editor.selectedCompId === comp.id && distToDelete < 15/zoom) {
+              removeUISprite(s.id);
+              setEditor({ selectedCompId: null, selectedSpriteId: null });
+              hit = true;
+              return;
+            }
           }
 
-          // Check Resize Handles
+          // --- Resize Handles (tight bounds corners) ---
           if (editor.selectedCompId === comp.id || comp.id === 'pixel_body') {
-            if (Math.abs(hx) < hs && Math.abs(hy) < hs) { 
-               setIsResizing(true); setResizeHandle('tl'); hit = true; 
-               if (comp.id === 'pixel_body') setResizeSnapshot({ w: s.width, h: s.height, pixels: s.pixels, keyframes: keyframes[s.id] });
-               return; 
+            const snapshotDims = comp.id === 'pixel_body'
+              ? { w: comp.spriteW || s.width, h: comp.spriteH || s.height, pixels: s.pixels, keyframes: keyframes[s.id] }
+              : null;
+
+            if (Math.abs(hx) < hs && Math.abs(hy) < hs) {
+              setIsResizing(true); setResizeHandle('tl'); hit = true;
+              if (snapshotDims) setResizeSnapshot(snapshotDims);
+              return;
             }
-            if (Math.abs(hx - comp.w) < hs && Math.abs(hy) < hs) { 
-               setIsResizing(true); setResizeHandle('tr'); hit = true; 
-               if (comp.id === 'pixel_body') setResizeSnapshot({ w: s.width, h: s.height, pixels: s.pixels, keyframes: keyframes[s.id] });
-               return; 
+            if (Math.abs(hx - comp.w) < hs && Math.abs(hy) < hs) {
+              setIsResizing(true); setResizeHandle('tr'); hit = true;
+              if (snapshotDims) setResizeSnapshot(snapshotDims);
+              return;
             }
-            if (Math.abs(hx) < hs && Math.abs(hy - comp.h) < hs) { 
-               setIsResizing(true); setResizeHandle('bl'); hit = true; 
-               if (comp.id === 'pixel_body') setResizeSnapshot({ w: s.width, h: s.height, pixels: s.pixels, keyframes: keyframes[s.id] });
-               return; 
+            if (Math.abs(hx) < hs && Math.abs(hy - comp.h) < hs) {
+              setIsResizing(true); setResizeHandle('bl'); hit = true;
+              if (snapshotDims) setResizeSnapshot(snapshotDims);
+              return;
             }
-            if (Math.abs(hx - comp.w) < hs && Math.abs(hy - comp.h) < hs) { 
-               setIsResizing(true); setResizeHandle('br'); hit = true; 
-               if (comp.id === 'pixel_body') setResizeSnapshot({ w: s.width, h: s.height, pixels: s.pixels, keyframes: keyframes[s.id] });
-               return; 
+            if (Math.abs(hx - comp.w) < hs && Math.abs(hy - comp.h) < hs) {
+              setIsResizing(true); setResizeHandle('br'); hit = true;
+              if (snapshotDims) setResizeSnapshot(snapshotDims);
+              return;
             }
           }
 
-          // If just clicking the body
+          // --- Select / Start Drag ---
           setEditor({ selectedSpriteId: s.id, selectedCompId: comp.id });
           setCompDragOffset({ x: relX - comp.x, y: relY - comp.y });
           hit = true;

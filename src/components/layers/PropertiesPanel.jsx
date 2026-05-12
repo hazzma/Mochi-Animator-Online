@@ -1,10 +1,10 @@
 import React from 'react';
 import useProjectStore from '../../store/projectStore';
-import { Settings2, Maximize2, Move } from 'lucide-react';
+import { Settings2, Maximize2, Move, RotateCw } from 'lucide-react';
 import { getInterpolatedPosition } from '../../utils/tweenUtils';
 
 const PropertiesPanel = () => {
-  const { project, setKeyframe, updateSpritePixels, recordHistory } = useProjectStore();
+  const { project, setKeyframe, updateSpritePixels, recordHistory, setSpriteRotation } = useProjectStore();
   const { sprites, keyframes, editor } = project;
   const { selectedSpriteId, currentFrame } = editor;
 
@@ -12,6 +12,8 @@ const PropertiesPanel = () => {
   const currentPos = getInterpolatedPosition(keyframes[selectedSpriteId], currentFrame);
 
   if (!selectedSprite) return null;
+
+  const rotation = selectedSprite.rotation ?? 0;
 
   const handleUpdateKeyframe = (key, value) => {
     recordHistory();
@@ -23,7 +25,6 @@ const PropertiesPanel = () => {
     const newW = key === 'width' ? Number(value) : selectedSprite.width;
     const newH = key === 'height' ? Number(value) : selectedSprite.height;
     
-    // Create new pixel array and copy old data
     const newPixels = new Array(newW * newH).fill(false);
     for (let y = 0; y < Math.min(newH, selectedSprite.height); y++) {
       for (let x = 0; x < Math.min(newW, selectedSprite.width); x++) {
@@ -31,7 +32,6 @@ const PropertiesPanel = () => {
       }
     }
 
-    // This is a bit heavy, but works for small OLED sprites
     useProjectStore.setState((state) => ({
       project: {
         ...state.project,
@@ -40,6 +40,11 @@ const PropertiesPanel = () => {
         )
       }
     }));
+  };
+
+  const handleRotation = (val) => {
+    const deg = ((Number(val) % 360) + 360) % 360;
+    setSpriteRotation(selectedSpriteId, deg);
   };
 
   return (
@@ -104,6 +109,37 @@ const PropertiesPanel = () => {
               onChange={(e) => handleUpdateSize('height', e.target.value)}
             />
           </div>
+        </div>
+      </div>
+
+      {/* Rotation */}
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <RotateCw size={10} className="text-[#555]" />
+          <span className="text-[9px] text-[#555] uppercase font-bold">Rotation</span>
+          <span className="ml-auto text-[9px] text-oled font-mono font-bold">{rotation}°</span>
+        </div>
+        <input
+          type="range"
+          min="0" max="359"
+          value={rotation}
+          onChange={(e) => handleRotation(e.target.value)}
+          className="w-full h-1 accent-oled rounded cursor-pointer"
+        />
+        <div className="grid grid-cols-4 gap-1">
+          {[0, 90, 180, 270].map(deg => (
+            <button
+              key={deg}
+              onClick={() => handleRotation(deg)}
+              className={`text-[9px] py-1 rounded border font-bold transition-all ${
+                rotation === deg
+                  ? 'bg-oled/20 text-oled border-oled/40'
+                  : 'bg-[#222] text-[#555] border-[#333] hover:text-[#999]'
+              }`}
+            >
+              {deg}°
+            </button>
+          ))}
         </div>
       </div>
     </div>
