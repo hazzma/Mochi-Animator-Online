@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import useProjectStore from '../../store/projectStore';
 import LayerItem from './LayerItem';
 import PropertiesPanel from './PropertiesPanel';
@@ -10,7 +10,8 @@ const LayerPanel = () => {
     addSprite, 
     deleteSprite, 
     renameSprite, 
-    toggleSpriteVisibility 
+    toggleSpriteVisibility,
+    toggleSpriteLock
   } = useProjectStore();
   const { sprites, editor } = project;
   
@@ -95,6 +96,7 @@ const LayerPanel = () => {
               isSelected={editor.selectedSpriteId === sprite.id}
               onSelect={(id) => setEditor({ selectedSpriteId: id })}
               onToggleVisibility={toggleSpriteVisibility}
+              onToggleLock={toggleSpriteLock}
               onDelete={deleteSprite}
               onRename={renameSprite}
             />

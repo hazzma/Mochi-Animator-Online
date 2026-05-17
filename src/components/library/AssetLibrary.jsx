@@ -1,4 +1,3 @@
-import React from 'react';
 import { X, Plus, Sparkles, Smile, Eye, Heart } from 'lucide-react';
 import useProjectStore from '../../store/projectStore';
 import { DEFAULT_ASSETS } from '../../data/defaultAssets';

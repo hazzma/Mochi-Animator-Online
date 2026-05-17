@@ -1,9 +1,9 @@
-import React from 'react';
+import { useState } from 'react';
 import useProjectStore from '../../store/projectStore';
 import { 
   Pencil, Eraser, PaintBucket, Square, Circle,
   MousePointer2, Undo2, Redo2, Layers,
-  Settings2, Grid3X3, HelpCircle, X,
+  Grid3X3, HelpCircle, X,
   Clock, Type, Activity, BarChart3, Image as ImageIcon,
   Magnet, RotateCw
 } from 'lucide-react';
@@ -11,7 +11,7 @@ import {
 const CanvasToolbar = () => {
   const { project, setEditor, undo, redo, addComponent, rotateSprite } = useProjectStore();
     const { activeTool, radius, zoom, onionSkin, showGrid, brushSize, brushShape, currentMode, selectedSpriteId, snappingEnabled } = project.editor;
-  const [showHelp, setShowHelp] = React.useState(false);
+  const [showHelp, setShowHelp] = useState(false);
 
   const tools = [
     { id: 'move', icon: MousePointer2, label: 'Move Tool', desc: 'Select and move layers. Creating multiple points on the timeline will automatically animate the motion.', shortcut: 'V or Ctrl+S' },

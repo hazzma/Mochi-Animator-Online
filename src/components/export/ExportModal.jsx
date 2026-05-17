@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import useProjectStore from '../../store/projectStore';
 import { generateCLibrary } from '../../utils/exportEngine';
 import JSZip from 'jszip';

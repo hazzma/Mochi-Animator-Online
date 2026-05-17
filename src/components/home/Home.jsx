@@ -1,8 +1,6 @@
-import React, { useState } from 'react';
-import { Plus, Upload, Clock, Box, Trash2, ArrowRight } from 'lucide-react';
+import { useState } from 'react';
+import { Plus, Upload, Clock, Box, ArrowRight } from 'lucide-react';
 import useProjectStore from '../../store/projectStore';
-// import logoUrl from '../../assets/PCB LOGO.png';
-const logoUrl = "logo.svg";
 
 const Home = () => {
   const { loadProject, project: currentProject } = useProjectStore();
@@ -60,7 +58,7 @@ const Home = () => {
       try {
         const json = JSON.parse(event.target.result);
         loadProject(json);
-      } catch (err) {
+      } catch {
         alert("Invalid project file");
       }
     };

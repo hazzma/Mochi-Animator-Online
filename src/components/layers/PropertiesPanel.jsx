@@ -1,10 +1,9 @@
-import React from 'react';
 import useProjectStore from '../../store/projectStore';
 import { Settings2, Maximize2, Move, RotateCw } from 'lucide-react';
 import { getInterpolatedPosition } from '../../utils/tweenUtils';
 
 const PropertiesPanel = () => {
-  const { project, setKeyframe, updateSpritePixels, recordHistory, setSpriteRotation } = useProjectStore();
+  const { project, setKeyframe, recordHistory, setSpriteRotation } = useProjectStore();
   const { sprites, keyframes, editor } = project;
   const { selectedSpriteId, currentFrame } = editor;
 
@@ -14,13 +13,16 @@ const PropertiesPanel = () => {
   if (!selectedSprite) return null;
 
   const rotation = selectedSprite.rotation ?? 0;
+  const isLocked = selectedSprite.locked;
 
   const handleUpdateKeyframe = (key, value) => {
+    if (isLocked) return;
     recordHistory();
     setKeyframe(selectedSpriteId, currentFrame, { [key]: Number(value) });
   };
 
   const handleUpdateSize = (key, value) => {
+    if (isLocked) return;
     recordHistory();
     const newW = key === 'width' ? Number(value) : selectedSprite.width;
     const newH = key === 'height' ? Number(value) : selectedSprite.height;
@@ -43,8 +45,9 @@ const PropertiesPanel = () => {
   };
 
   const handleRotation = (val) => {
+    if (isLocked) return;
     const deg = ((Number(val) % 360) + 360) % 360;
-    setSpriteRotation(selectedSpriteId, deg);
+    setSpriteRotation(selectedSpriteId, deg, true);
   };
 
   return (
@@ -52,6 +55,7 @@ const PropertiesPanel = () => {
       <div className="flex items-center gap-2 mb-1">
         <Settings2 size={12} className="text-oled" />
         <span className="text-[10px] text-oled uppercase font-bold tracking-wider">Properties</span>
+        {isLocked && <span className="ml-auto text-[9px] text-yellow-400 font-bold uppercase">Locked</span>}
       </div>
 
       {/* Position */}
@@ -67,6 +71,7 @@ const PropertiesPanel = () => {
               type="number"
               className="bg-transparent text-xs text-white w-full outline-none"
               value={currentPos.x}
+              disabled={isLocked}
               onChange={(e) => handleUpdateKeyframe('x', e.target.value)}
             />
           </div>
@@ -76,6 +81,7 @@ const PropertiesPanel = () => {
               type="number"
               className="bg-transparent text-xs text-white w-full outline-none"
               value={currentPos.y}
+              disabled={isLocked}
               onChange={(e) => handleUpdateKeyframe('y', e.target.value)}
             />
           </div>
@@ -96,6 +102,7 @@ const PropertiesPanel = () => {
               min="1" max="128"
               className="bg-transparent text-xs text-white w-full outline-none"
               value={selectedSprite.width}
+              disabled={isLocked}
               onChange={(e) => handleUpdateSize('width', e.target.value)}
             />
           </div>
@@ -106,6 +113,7 @@ const PropertiesPanel = () => {
               min="1" max="64"
               className="bg-transparent text-xs text-white w-full outline-none"
               value={selectedSprite.height}
+              disabled={isLocked}
               onChange={(e) => handleUpdateSize('height', e.target.value)}
             />
           </div>
@@ -123,6 +131,7 @@ const PropertiesPanel = () => {
           type="range"
           min="0" max="359"
           value={rotation}
+          disabled={isLocked}
           onChange={(e) => handleRotation(e.target.value)}
           className="w-full h-1 accent-oled rounded cursor-pointer"
         />
@@ -131,6 +140,7 @@ const PropertiesPanel = () => {
             <button
               key={deg}
               onClick={() => handleRotation(deg)}
+              disabled={isLocked}
               className={`text-[9px] py-1 rounded border font-bold transition-all ${
                 rotation === deg
                   ? 'bg-oled/20 text-oled border-oled/40'

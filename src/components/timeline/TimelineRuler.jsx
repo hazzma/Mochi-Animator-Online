@@ -1,5 +1,3 @@
-import React from 'react';
-
 const TimelineRuler = ({ totalFrames, currentFrame, fps = 12, onSetFrame }) => {
   return (
     <div className="h-8 border-b border-[#333] bg-[#222] flex sticky top-0 z-10">

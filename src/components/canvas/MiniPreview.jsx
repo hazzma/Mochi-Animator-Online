@@ -1,11 +1,11 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import useProjectStore from '../../store/projectStore';
-import { getInterpolatedPosition } from '../../utils/tweenUtils';
+import { renderProjectFrame } from '../../utils/canvasUtils';
 
 const MiniPreview = () => {
   const canvasRef = useRef(null);
   const { project } = useProjectStore();
-  const { sprites, keyframes, editor, meta } = project;
+  const { editor, meta } = project;
   const { currentFrame } = editor;
 
   useEffect(() => {
@@ -16,26 +16,8 @@ const MiniPreview = () => {
     // Scale for mini preview (usually 1x or 2x)
     const scale = 1;
     
-    // Clear
-    ctx.fillStyle = 'black';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Render all visible sprites
-    sprites.forEach(sprite => {
-      if (!sprite.visible) return;
-      const pos = getInterpolatedPosition(keyframes[sprite.id], currentFrame);
-      if (!pos || !pos.visible) return;
-
-      ctx.fillStyle = '#00FF41'; // OLED Green
-      for (let y = 0; y < sprite.height; y++) {
-        for (let x = 0; x < sprite.width; x++) {
-          if (sprite.pixels[y * sprite.width + x]) {
-            ctx.fillRect((pos.x + x) * scale, (pos.y + y) * scale, scale, scale);
-          }
-        }
-      }
-    });
-  }, [sprites, keyframes, currentFrame, meta]);
+    renderProjectFrame(ctx, project, currentFrame, scale);
+  }, [project, currentFrame, meta]);
 
   return (
     <div className="absolute bottom-4 right-4 z-20 bg-black border border-[#333] rounded shadow-2xl overflow-hidden pointer-events-none">

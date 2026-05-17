@@ -1,13 +1,13 @@
-import React from 'react';
 import useProjectStore from '../../store/projectStore';
-import { Trash2, Type, Clock, Activity, Image as ImageIcon } from 'lucide-react';
+import { Trash2, Type, Clock, Activity } from 'lucide-react';
 
 const ComponentSettings = () => {
-  const { project, updateComponent, removeUISprite, setEditor } = useProjectStore();
+  const { project, updateComponent, removeUISprite } = useProjectStore();
   const { selectedSpriteId, selectedCompId } = project.editor;
   
   const sprite = project.sprites.find(s => s.id === selectedSpriteId);
   const component = sprite?.uiComponents?.find(c => c.id === selectedCompId);
+  const isLocked = sprite?.locked;
 
   if (!component) {
     return (
@@ -21,7 +21,8 @@ const ComponentSettings = () => {
   }
 
   const handleUpdate = (data) => {
-    updateComponent(selectedSpriteId, selectedCompId, data);
+    if (isLocked) return;
+    updateComponent(selectedSpriteId, selectedCompId, data, true);
   };
 
   return (
@@ -37,7 +38,8 @@ const ComponentSettings = () => {
           onClick={() => {
             removeUISprite(selectedSpriteId);
           }}
-          className="p-1.5 hover:bg-red-500/20 text-[#666] hover:text-red-500 rounded transition-colors"
+          disabled={isLocked}
+          className={`p-1.5 rounded transition-colors ${isLocked ? 'text-[#333] cursor-not-allowed' : 'hover:bg-red-500/20 text-[#666] hover:text-red-500'}`}
         >
           <Trash2 size={14} />
         </button>
@@ -53,6 +55,7 @@ const ComponentSettings = () => {
               <input 
                 type="number"
                 value={Math.round(component.x)}
+                disabled={isLocked}
                 onChange={(e) => handleUpdate({ x: parseInt(e.target.value) || 0 })}
                 className="w-full bg-black border border-[#333] rounded px-2 py-1.5 text-xs outline-none focus:border-blue-500/50"
               />
@@ -62,6 +65,7 @@ const ComponentSettings = () => {
               <input 
                 type="number"
                 value={Math.round(component.y)}
+                disabled={isLocked}
                 onChange={(e) => handleUpdate({ y: parseInt(e.target.value) || 0 })}
                 className="w-full bg-black border border-[#333] rounded px-2 py-1.5 text-xs outline-none focus:border-blue-500/50"
               />
@@ -71,6 +75,7 @@ const ComponentSettings = () => {
               <input 
                 type="number"
                 value={Math.round(component.w)}
+                disabled={isLocked}
                 onChange={(e) => handleUpdate({ w: parseInt(e.target.value) || 1 })}
                 className="w-full bg-black border border-[#333] rounded px-2 py-1.5 text-xs outline-none focus:border-blue-500/50"
               />
@@ -80,6 +85,7 @@ const ComponentSettings = () => {
               <input 
                 type="number"
                 value={Math.round(component.h)}
+                disabled={isLocked}
                 onChange={(e) => handleUpdate({ h: parseInt(e.target.value) || 1 })}
                 className="w-full bg-black border border-[#333] rounded px-2 py-1.5 text-xs outline-none focus:border-blue-500/50"
               />
@@ -97,6 +103,7 @@ const ComponentSettings = () => {
                 <input 
                   type="text"
                   value={component.props.text}
+                  disabled={isLocked}
                   onChange={(e) => handleUpdate({ props: { ...component.props, text: e.target.value } })}
                   className="w-full bg-black border border-[#333] rounded px-2 py-1.5 text-xs outline-none focus:border-blue-500/50"
                 />
@@ -108,6 +115,7 @@ const ComponentSettings = () => {
                 <label className="text-[8px] text-[#444] uppercase font-bold block mb-1">Time Format</label>
                 <select 
                   value={component.props.format}
+                  disabled={isLocked}
                   onChange={(e) => handleUpdate({ props: { ...component.props, format: e.target.value } })}
                   className="w-full bg-black border border-[#333] rounded px-2 py-1.5 text-xs outline-none focus:border-blue-500/50 text-white"
                 >
@@ -126,6 +134,7 @@ const ComponentSettings = () => {
                   min="0"
                   max="100"
                   value={component.props.value}
+                  disabled={isLocked}
                   onChange={(e) => handleUpdate({ props: { ...component.props, value: parseInt(e.target.value) } })}
                   className="w-full h-1.5 bg-black rounded-lg appearance-none cursor-pointer accent-blue-500"
                 />
@@ -140,6 +149,7 @@ const ComponentSettings = () => {
                     <button 
                       key={icon}
                       onClick={() => handleUpdate({ props: { ...component.props, icon } })}
+                      disabled={isLocked}
                       className={`p-2 rounded border transition-all text-center ${
                         component.props.icon === icon ? 'bg-blue-500/20 border-blue-500 text-blue-400' : 'bg-black border-[#333] text-[#555] hover:text-white'
                       }`}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useEffect, useState } from 'react';
 import useProjectStore from './store/projectStore';
 import PixelCanvas from './components/canvas/PixelCanvas';
 import CanvasToolbar from './components/canvas/CanvasToolbar';
@@ -7,9 +7,9 @@ import Timeline from './components/timeline/Timeline';
 import PreviewPanel from './components/preview/PreviewPanel';
 import ExportModal from './components/export/ExportModal';
 import AssetLibrary from './components/library/AssetLibrary';
-import { Sparkles } from 'lucide-react';
+import { Download, Sparkles } from 'lucide-react';
 import Home from './components/home/Home';
-import { Home as HomeIcon, Menu, X as CloseIcon } from 'lucide-react';
+import { Menu, X as CloseIcon } from 'lucide-react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import MiniPreview from './components/canvas/MiniPreview';
 import ComponentSettings from './components/designer/ComponentSettings';
@@ -21,8 +21,19 @@ function App() {
   const [showLibrary, setShowLibrary] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
 
+  const downloadProjectJson = () => {
+    const safeName = (project.meta.name || 'mochi_project').replace(/[^a-z0-9-_]+/gi, '_');
+    const blob = new Blob([JSON.stringify(project, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${safeName}.mochi.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   // Animation Heartbeat
-  React.useEffect(() => {
+  useEffect(() => {
     let interval;
     if (project.editor.isPlaying) {
       interval = setInterval(() => {
@@ -33,7 +44,7 @@ function App() {
   }, [project.editor.isPlaying, project.meta.fps, tickFrame]);
 
   // Keyboard Shortcuts
-  React.useEffect(() => {
+  useEffect(() => {
     const handleGlobalKeyDown = (e) => {
       // Ignore if typing in an input
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
@@ -53,9 +64,11 @@ function App() {
 
       // Delete Shortcut
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (project.editor.selectedCompId) {
-          removeUISprite(project.editor.selectedCompId);
-          setEditor({ selectedCompId: null });
+        const selectedSprite = project.sprites.find(s => s.id === project.editor.selectedSpriteId);
+        if (project.editor.selectedCompId && !selectedSprite?.locked) {
+          removeUISprite(project.editor.selectedSpriteId);
+          setEditor({ selectedCompId: null, selectedSpriteId: null });
+          e.preventDefault();
         }
       }
 
@@ -90,7 +103,16 @@ function App() {
 
     window.addEventListener('keydown', handleGlobalKeyDown, true);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown, true);
-  }, [undo, redo, setEditor, project.editor.zoom, removeUISprite]);
+  }, [
+    undo,
+    redo,
+    setEditor,
+    project.editor.zoom,
+    project.editor.selectedCompId,
+    project.editor.selectedSpriteId,
+    project.sprites,
+    removeUISprite
+  ]);
 
   if (screen === 'home') {
     return <Home />;
@@ -128,6 +150,13 @@ function App() {
               className="px-4 py-1.5 bg-[#333] hover:bg-[#444] text-[#aaa] hover:text-white rounded text-[10px] font-bold uppercase transition-all"
             >
               Preview
+            </button>
+            <button
+              onClick={downloadProjectJson}
+              className="px-4 py-1.5 bg-[#333] hover:bg-[#444] text-[#aaa] hover:text-white rounded text-[10px] font-bold uppercase transition-all flex items-center gap-2"
+            >
+              <Download size={12} />
+              Save JSON
             </button>
             <button 
               onClick={() => setShowExport(true)}
@@ -249,6 +278,13 @@ function App() {
               <div>
                 <h3 className="text-[9px] font-bold text-oled uppercase tracking-[0.2em] mb-4">Content Library</h3>
                 <div className="space-y-2">
+                  <button 
+                    onClick={() => { downloadProjectJson(); setShowMenu(false); }}
+                    className="w-full text-left px-4 py-2 rounded-lg hover:bg-[#222] text-[#888] hover:text-white transition-all text-[11px] flex items-center gap-3 group"
+                  >
+                    <Download size={14} className="text-blue-400 group-hover:scale-110 transition-transform" />
+                    Save Project JSON
+                  </button>
                   <button 
                     onClick={() => { setShowLibrary(true); setShowMenu(false); }}
                     className="w-full text-left px-4 py-2 rounded-lg hover:bg-[#222] text-[#888] hover:text-white transition-all text-[11px] flex items-center gap-3 group"

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import useProjectStore from '../../store/projectStore';
 import { getInterpolatedPosition } from '../../utils/tweenUtils';
 import { floodFill, drawRect, drawEllipse, drawRoundedRect } from '../../utils/canvasUtils';
@@ -15,7 +15,6 @@ const PixelCanvas = () => {
     removeUISprite, 
     setEditor,
     addSprite,
-    moveSpriteKeyframes,
     resizeSprite
   } = useProjectStore();
   const { meta, sprites, keyframes, editor } = project;
@@ -265,8 +264,16 @@ const PixelCanvas = () => {
 
         if (comp.type === 'ui-clock') {
           const hours = systemTime.getHours().toString().padStart(2, '0');
+          const hours12 = ((systemTime.getHours() + 11) % 12 + 1).toString().padStart(2, '0');
           const mins = systemTime.getMinutes().toString().padStart(2, '0');
-          ctx.fillText(`${hours}:${mins}`, cx, cy);
+          const secs = systemTime.getSeconds().toString().padStart(2, '0');
+          const format = comp.props.format || 'HH:mm';
+          const timeText = format === 'hh:mm'
+            ? `${hours12}:${mins}`
+            : format === 'HH:mm:ss'
+              ? `${hours}:${mins}:${secs}`
+              : `${hours}:${mins}`;
+          ctx.fillText(timeText, cx, cy);
         } else if (comp.type === 'ui-label') {
           ctx.fillText(comp.props.text || 'LABEL', cx, cy);
         } else if (comp.type === 'ui-bar') {
@@ -281,8 +288,10 @@ const PixelCanvas = () => {
           ctx.strokeStyle = ctx.fillStyle;
           ctx.beginPath();
           ctx.moveTo(cx, cy + ch);
-          for (let i = 0; i < 5; i++) {
-            ctx.lineTo(cx + (cw * i / 4), cy + (ch * Math.random()));
+          for (let i = 0; i < 6; i++) {
+            const t = i / 5;
+            const wave = 0.5 + Math.sin((currentFrame + i) * 0.9) * 0.35;
+            ctx.lineTo(cx + (cw * t), cy + (ch * (1 - wave)));
           }
           ctx.stroke();
         } else if (comp.type === 'ui-icon') {
@@ -361,7 +370,25 @@ const PixelCanvas = () => {
       });
     }
 
-  }, [sprites, keyframes, currentFrame, zoom, showGrid, selectedSpriteId, meta, isDragging, startPos, currentPos, isShiftPressed, activeTool, editor.onionSkin, snapGuides]);
+  }, [
+    sprites,
+    keyframes,
+    currentFrame,
+    zoom,
+    showGrid,
+    selectedSpriteId,
+    meta,
+    isDragging,
+    startPos,
+    currentPos,
+    isShiftPressed,
+    activeTool,
+    editor.onionSkin,
+    editor.currentMode,
+    editor.selectedCompId,
+    systemTime,
+    snapGuides
+  ]);
 
   // Interaction Logic
   const getPixelCoords = (e) => {
@@ -384,6 +411,11 @@ const PixelCanvas = () => {
   const handleMouseDown = (e) => {
     if (!selectedSpriteId) return;
     const { x, y } = getPixelCoords(e);
+    const selectedBefore = sprites.find(s => s.id === selectedSpriteId);
+
+    if (selectedBefore?.locked && activeTool !== 'move' && editor.currentMode !== 'designer') {
+      return;
+    }
     
     // RECORD HISTORY BEFORE CHANGE
     recordHistory();
@@ -445,6 +477,15 @@ const PixelCanvas = () => {
           const hs = Math.max(4, 8 / zoom);
           const hx = relX - comp.x;
           const hy = relY - comp.y;
+
+          if (s.locked) {
+            setEditor({ selectedSpriteId: s.id, selectedCompId: comp.id });
+            setIsDragging(false);
+            setStartPos(null);
+            setCurrentPos(null);
+            hit = true;
+            return;
+          }
 
           // --- Delete Button (drawn at tight-bounds TL, -12px in screen) ---
           if (comp.id === 'pixel_body') {
@@ -509,6 +550,10 @@ const PixelCanvas = () => {
     if (activeTool === 'pencil' || activeTool === 'eraser' || activeTool === 'fill' || ['rect', 'ellipse', 'roundedRect'].includes(activeTool)) {
       // Bug Fix: If drawing on a UI layer, automatically create a new PIXEL layer
       const selectedSprite = sprites.find(s => s.id === selectedSpriteId);
+      if (selectedSprite?.locked) {
+        setIsDragging(false);
+        return;
+      }
       if (selectedSprite && selectedSprite.uiComponents && selectedSprite.uiComponents.length > 0) {
         const newName = `Layer ${sprites.length + 1}`;
         addSprite(newName);
@@ -539,6 +584,8 @@ const PixelCanvas = () => {
 
   const handleMouseMove = (e) => {
     if (!isDragging || !selectedSpriteId) return;
+    const activeSprite = sprites.find(s => s.id === selectedSpriteId);
+    if (activeSprite?.locked) return;
     const { x, y } = getPixelCoords(e);
     setCurrentPos({ x, y });
 
@@ -686,6 +733,17 @@ const PixelCanvas = () => {
 
   const handleMouseUp = (e) => {
     if (!isDragging || !selectedSpriteId) return;
+    const activeSprite = sprites.find(s => s.id === selectedSpriteId);
+    if (activeSprite?.locked) {
+      setIsDragging(false);
+      setIsResizing(false);
+      setResizeHandle(null);
+      setResizeSnapshot(null);
+      setSnapGuides([]);
+      setStartPos(null);
+      setCurrentPos(null);
+      return;
+    }
 
     const { x, y } = getPixelCoords(e);
     const pos = getInterpolatedPosition(keyframes[selectedSpriteId], currentFrame);
@@ -723,7 +781,7 @@ const PixelCanvas = () => {
 
   // Action Applications
   const applyDraw = (cx, cy) => {
-    if (!selectedSprite) return;
+    if (!selectedSprite || selectedSprite.locked) return;
     const pos = getInterpolatedPosition(keyframes[selectedSpriteId], currentFrame);
     const basePixels = (!selectedSprite.shapeLocked && pos.pixels) ? pos.pixels : selectedSprite.pixels;
     const newPixels = [...basePixels];
@@ -765,7 +823,7 @@ const PixelCanvas = () => {
   };
 
   const applyFill = (x, y) => {
-    if (!selectedSprite || x < 0 || x >= selectedSprite.width || y < 0 || y >= selectedSprite.height) return;
+    if (!selectedSprite || selectedSprite.locked || x < 0 || x >= selectedSprite.width || y < 0 || y >= selectedSprite.height) return;
     const pos = getInterpolatedPosition(keyframes[selectedSpriteId], currentFrame);
     const basePixels = (!selectedSprite.shapeLocked && pos.pixels) ? pos.pixels : selectedSprite.pixels;
     const newPixels = floodFill(basePixels, selectedSprite.width, selectedSprite.height, x, y, true);
@@ -774,7 +832,7 @@ const PixelCanvas = () => {
   };
 
   const applyRect = (x1, y1, x2, y2) => {
-    if (!selectedSprite) return;
+    if (!selectedSprite || selectedSprite.locked) return;
     const pos = getInterpolatedPosition(keyframes[selectedSpriteId], currentFrame);
     const basePixels = (!selectedSprite.shapeLocked && pos.pixels) ? pos.pixels : selectedSprite.pixels;
     const newPixels = drawRect(basePixels, selectedSprite.width, selectedSprite.height, x1, y1, x2, y2, true);
@@ -783,7 +841,7 @@ const PixelCanvas = () => {
   };
 
   const applyRoundedRect = (x1, y1, x2, y2) => {
-    if (!selectedSprite) return;
+    if (!selectedSprite || selectedSprite.locked) return;
     const pos = getInterpolatedPosition(keyframes[selectedSpriteId], currentFrame);
     const basePixels = (!selectedSprite.shapeLocked && pos.pixels) ? pos.pixels : selectedSprite.pixels;
     const newPixels = drawRoundedRect(basePixels, selectedSprite.width, selectedSprite.height, x1, y1, x2, y2, radius, true);
@@ -792,7 +850,7 @@ const PixelCanvas = () => {
   };
 
   const applyEllipse = (x1, y1, x2, y2) => {
-    if (!selectedSprite) return;
+    if (!selectedSprite || selectedSprite.locked) return;
     const pos = getInterpolatedPosition(keyframes[selectedSpriteId], currentFrame);
     const basePixels = (!selectedSprite.shapeLocked && pos.pixels) ? pos.pixels : selectedSprite.pixels;
     const newPixels = drawEllipse(basePixels, selectedSprite.width, selectedSprite.height, x1, y1, x2, y2, true);

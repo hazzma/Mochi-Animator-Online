@@ -1,8 +1,8 @@
-import React, { useRef, useEffect, useState } from 'react';
-import { Eye, EyeOff, Copy, Trash2 } from 'lucide-react';
+import { useRef, useEffect, useState } from 'react';
+import { Eye, EyeOff, Copy, Trash2, Lock, Unlock } from 'lucide-react';
 import useProjectStore from '../../store/projectStore';
 
-const LayerItem = ({ sprite, isSelected, onSelect, onToggleVisibility, onDelete, onRename }) => {
+const LayerItem = ({ sprite, isSelected, onSelect, onToggleVisibility, onToggleLock, onDelete, onRename }) => {
   const canvasRef = useRef(null);
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(sprite.name);
@@ -89,6 +89,13 @@ const LayerItem = ({ sprite, isSelected, onSelect, onToggleVisibility, onDelete,
         >
           {sprite.visible ? <Eye size={12} /> : <EyeOff size={12} />}
         </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggleLock(sprite.id); }}
+          className={`p-1 rounded hover:bg-[#333] transition-colors ${sprite.locked ? 'text-yellow-400' : 'text-[#555] hover:text-[#aaa]'}`}
+          title={sprite.locked ? 'Unlock Layer' : 'Lock Layer'}
+        >
+          {sprite.locked ? <Lock size={12} /> : <Unlock size={12} />}
+        </button>
         <button 
           onClick={(e) => { e.stopPropagation(); duplicateSprite(sprite.id); }}
           className="p-1 rounded hover:bg-[#333] text-[#555] hover:text-blue-400 transition-colors"
@@ -98,7 +105,8 @@ const LayerItem = ({ sprite, isSelected, onSelect, onToggleVisibility, onDelete,
         </button>
         <button 
           onClick={(e) => { e.stopPropagation(); onDelete(sprite.id); }}
-          className="p-1 rounded hover:bg-[#333] text-[#555] hover:text-red-500 transition-colors"
+          disabled={sprite.locked}
+          className={`p-1 rounded hover:bg-[#333] transition-colors ${sprite.locked ? 'text-[#333] cursor-not-allowed' : 'text-[#555] hover:text-red-500'}`}
           title="Delete"
         >
           <Trash2 size={12} />

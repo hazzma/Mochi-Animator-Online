@@ -2,6 +2,80 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { getInterpolatedPosition } from '../utils/tweenUtils';
 
+const DEFAULT_META = {
+  name: "untitled",
+  fps: 12,
+  totalFrames: 24,
+  canvasW: 128,
+  canvasH: 64,
+};
+
+const DEFAULT_EDITOR = {
+  selectedSpriteId: "sprite_001",
+  currentFrame: 0,
+  activeTool: "pencil",
+  zoom: 4,
+  isPlaying: false,
+  showGrid: true,
+  radius: 4,
+  onionSkin: false,
+  brushSize: 1,
+  brushShape: 'square',
+  currentMode: 'animator',
+  selectedCompId: null,
+  snappingEnabled: true,
+};
+
+const createDefaultSprite = () => ({
+  id: "sprite_001",
+  name: "Main Layer",
+  visible: true,
+  locked: false,
+  shapeLocked: true,
+  rotation: 0,
+  width: 128,
+  height: 64,
+  pixels: new Array(128 * 64).fill(false),
+  uiComponents: [],
+  startFrame: 0,
+  endFrame: DEFAULT_META.totalFrames - 1,
+});
+
+const normalizeProject = (project = {}) => {
+  const meta = { ...DEFAULT_META, ...(project.meta || {}) };
+  const sprites = (project.sprites?.length ? project.sprites : [createDefaultSprite()]).map((sprite) => ({
+    visible: true,
+    locked: false,
+    shapeLocked: true,
+    rotation: 0,
+    uiComponents: [],
+    startFrame: 0,
+    endFrame: meta.totalFrames - 1,
+    ...sprite,
+    pixels: sprite.pixels || new Array((sprite.width || meta.canvasW) * (sprite.height || meta.canvasH)).fill(false),
+  }));
+
+  const selectedSpriteId = sprites.some(s => s.id === project.editor?.selectedSpriteId)
+    ? project.editor.selectedSpriteId
+    : sprites[0]?.id;
+
+  return {
+    meta,
+    sprites,
+    keyframes: project.keyframes || { [sprites[0].id]: { 0: { x: 0, y: 0, visible: true } } },
+    editor: {
+      ...DEFAULT_EDITOR,
+      ...(project.editor || {}),
+      selectedSpriteId,
+      currentFrame: Math.min(project.editor?.currentFrame ?? 0, meta.totalFrames - 1),
+    },
+  };
+};
+
+const isSpriteLocked = (project, spriteId) => {
+  return project.sprites.some(sprite => sprite.id === spriteId && sprite.locked);
+};
+
 const useProjectStore = create(
   persist(
     (set, get) => ({
@@ -11,49 +85,7 @@ const useProjectStore = create(
       past: [],
       future: [],
 
-      project: {
-        meta: {
-          name: "untitled",
-          fps: 12,
-          totalFrames: 24,
-          canvasW: 128,
-          canvasH: 64,
-        },
-        sprites: [
-          {
-            id: "sprite_001",
-            name: "Main Layer",
-            visible: true,
-            locked: false,
-            shapeLocked: true,
-            rotation: 0,
-            width: 128,
-            height: 64,
-            pixels: new Array(128 * 64).fill(false),
-            uiComponents: [], // For Lopaka-style components
-          }
-        ],
-        keyframes: {
-          "sprite_001": {
-            0: { x: 0, y: 0, visible: true },
-          }
-        },
-        editor: {
-          selectedSpriteId: "sprite_001",
-          currentFrame: 0,
-          activeTool: "pencil", 
-          zoom: 4,
-          isPlaying: false,
-          showGrid: true,
-          radius: 4,
-          onionSkin: false,
-          brushSize: 1,
-          brushShape: 'square', // 'square' | 'circle'
-          currentMode: 'animator', // 'animator' | 'designer'
-          selectedCompId: null,
-          snappingEnabled: true,
-        }
-      },
+      project: normalizeProject(),
 
       // --- HELPER FOR HISTORY ---
       recordHistory: () => {
@@ -97,7 +129,7 @@ const useProjectStore = create(
       setScreen: (screen) => set({ screen }),
       
       loadProject: (newProject) => set({ 
-        project: newProject,
+        project: normalizeProject(newProject),
         screen: 'editor',
         past: [],
         future: []
@@ -210,7 +242,9 @@ const useProjectStore = create(
         });
       },
 
-      setSpriteRotation: (spriteId, rotation) => {
+      setSpriteRotation: (spriteId, rotation, record = false) => {
+        if (isSpriteLocked(get().project, spriteId)) return;
+        if (record) get().recordHistory();
         set((state) => ({
           project: {
             ...state.project,
@@ -222,6 +256,7 @@ const useProjectStore = create(
       },
 
       rotateSprite: (spriteId) => {
+        if (isSpriteLocked(get().project, spriteId)) return;
         get().recordHistory();
         set((state) => {
           const sprite = state.project.sprites.find(s => s.id === spriteId);
@@ -254,6 +289,7 @@ const useProjectStore = create(
       },
 
       moveSpriteKeyframes: (spriteId, dx, dy) => {
+        if (isSpriteLocked(get().project, spriteId)) return;
         set((state) => {
           const spriteKeyframes = state.project.keyframes[spriteId];
           if (!spriteKeyframes) return state;
@@ -280,6 +316,7 @@ const useProjectStore = create(
       },
 
       resizeSprite: (spriteId, newW, newH, snapshot = null) => {
+        if (isSpriteLocked(get().project, spriteId)) return;
         // Only record history if NOT in the middle of a continuous drag resize
         if (!snapshot) get().recordHistory();
         
@@ -330,6 +367,7 @@ const useProjectStore = create(
       },
 
       updateSpritePixels: (spriteId, pixels) => {
+        if (isSpriteLocked(get().project, spriteId)) return;
         // We don't record history on EVERY pixel drawn for performance, 
         // usually handled on mouse up in the canvas. 
         // But for things like Fill, we should.
@@ -344,9 +382,12 @@ const useProjectStore = create(
       },
 
       deleteSprite: (spriteId) => {
+        if (isSpriteLocked(get().project, spriteId)) return { error: "Layer is locked." };
         get().recordHistory();
         set((state) => {
-          const { [spriteId]: _, ...remainingKeyframes } = state.project.keyframes;
+          const remainingKeyframes = Object.fromEntries(
+            Object.entries(state.project.keyframes).filter(([id]) => id !== spriteId)
+          );
           return {
             project: {
               ...state.project,
@@ -397,34 +438,42 @@ const useProjectStore = create(
         });
       },
 
-      renameSprite: (spriteId, name) => {
+      toggleSpriteVisibility: (spriteId) => {
+        get().recordHistory();
         set((state) => ({
           project: {
             ...state.project,
             sprites: state.project.sprites.map(s => 
-              s.id === spriteId ? { ...s, name } : s
+              s.id === spriteId ? { ...s, visible: !s.visible } : s
             )
           }
         }));
       },
 
-      toggleSpriteVisibility: (spriteId) => set((state) => ({
-        project: {
-          ...state.project,
-          sprites: state.project.sprites.map(s => 
-            s.id === spriteId ? { ...s, visible: !s.visible } : s
-          )
-        }
-      })),
+      toggleSpriteLock: (spriteId) => {
+        get().recordHistory();
+        set((state) => ({
+          project: {
+            ...state.project,
+            sprites: state.project.sprites.map(s => 
+              s.id === spriteId ? { ...s, locked: !s.locked } : s
+            )
+          }
+        }));
+      },
 
-      toggleShapeLock: (spriteId) => set((state) => ({
-        project: {
-          ...state.project,
-          sprites: state.project.sprites.map(s => 
-            s.id === spriteId ? { ...s, shapeLocked: s.shapeLocked === false ? true : false } : s
-          )
-        }
-      })),
+      toggleShapeLock: (spriteId) => {
+        if (isSpriteLocked(get().project, spriteId)) return;
+        get().recordHistory();
+        set((state) => ({
+          project: {
+            ...state.project,
+            sprites: state.project.sprites.map(s => 
+              s.id === spriteId ? { ...s, shapeLocked: s.shapeLocked === false ? true : false } : s
+            )
+          }
+        }));
+      },
 
       // UI Designer Actions
       addComponent: (type) => {
@@ -489,6 +538,7 @@ const useProjectStore = create(
         if (state.project.sprites.some(s => s.id !== spriteId && s.name === newName)) {
           return { error: "Name already exists!" };
         }
+        get().recordHistory();
         set((state) => ({
           project: {
             ...state.project,
@@ -501,6 +551,7 @@ const useProjectStore = create(
       },
 
       updateSpriteRange: (spriteId, startFrame, endFrame) => {
+        if (isSpriteLocked(get().project, spriteId)) return;
         get().recordHistory();
         set((state) => ({
           project: {
@@ -513,6 +564,7 @@ const useProjectStore = create(
       },
 
       removeUISprite: (spriteId) => {
+        if (isSpriteLocked(get().project, spriteId)) return { error: "Layer is locked." };
         get().recordHistory();
         set((state) => ({
           project: {
@@ -526,7 +578,9 @@ const useProjectStore = create(
         }));
       },
 
-      updateComponent: (spriteId, compId, data) => {
+      updateComponent: (spriteId, compId, data, record = false) => {
+        if (isSpriteLocked(get().project, spriteId)) return;
+        if (record) get().recordHistory();
         set((state) => ({
           project: {
             ...state.project,
@@ -544,6 +598,7 @@ const useProjectStore = create(
       },
 
       removeComponent: (spriteId, compId) => {
+        if (isSpriteLocked(get().project, spriteId)) return;
         get().recordHistory();
         set((state) => ({
           project: {
@@ -559,6 +614,7 @@ const useProjectStore = create(
 
       // Keyframe Actions
       updateKeyframePixels: (spriteId, frameIndex, pixels) => {
+        if (isSpriteLocked(get().project, spriteId)) return;
         set((state) => ({
           project: {
             ...state.project,
@@ -573,7 +629,9 @@ const useProjectStore = create(
         }));
       },
 
-      setKeyframe: (spriteId, frameIndex, data) => {
+      setKeyframe: (spriteId, frameIndex, data, record = false) => {
+        if (isSpriteLocked(get().project, spriteId)) return;
+        if (record) get().recordHistory();
         // Only record history if it's a significant change (not during drag, handled by dragEnd)
         set((state) => ({
           project: {
@@ -590,6 +648,7 @@ const useProjectStore = create(
       },
 
       deleteKeyframe: (spriteId, frameIndex) => {
+        if (isSpriteLocked(get().project, spriteId)) return;
         get().recordHistory();
         set((state) => {
           const spriteKeyframes = { ...state.project.keyframes[spriteId] };
@@ -634,6 +693,11 @@ const useProjectStore = create(
     {
       name: 'mochi-animator-storage',
       partialize: (state) => ({ project: state.project, screen: state.screen }),
+      merge: (persistedState, currentState) => ({
+        ...currentState,
+        ...persistedState,
+        project: normalizeProject(persistedState?.project),
+      }),
     }
   )
 );

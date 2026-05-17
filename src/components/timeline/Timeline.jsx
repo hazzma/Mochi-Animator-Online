@@ -28,7 +28,7 @@ const Timeline = () => {
         x: pos.x, 
         y: pos.y, 
         visible: true 
-      });
+      }, true);
     }
   };
 
@@ -130,7 +130,7 @@ const Timeline = () => {
              <button 
                 onClick={() => {
                   const pos = getInterpolatedPosition(keyframes[editor.selectedSpriteId], currentFrame);
-                  setKeyframe(editor.selectedSpriteId, currentFrame, { x: pos.x, y: pos.y, visible: true });
+                  setKeyframe(editor.selectedSpriteId, currentFrame, { x: pos.x, y: pos.y, visible: true }, true);
                 }}
                 className="flex items-center gap-2 px-3 h-7 rounded text-[9px] font-bold uppercase transition-all border bg-oled/10 text-oled border-oled/30 hover:bg-oled/20"
                 title="Add Keypoint at current frame"

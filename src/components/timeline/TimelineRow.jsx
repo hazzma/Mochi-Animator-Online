@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, Unlink } from 'lucide-react';
 
 const TimelineRow = ({ sprite, keyframes, totalFrames, currentFrame, isPlaying, onToggleKeyframe, onSetFrame, onToggleShapeLock, onUpdateRange }) => {
   const start = sprite.startFrame ?? 0;
   const end = sprite.endFrame ?? (totalFrames - 1);
+  const isLocked = sprite.locked;
   const cellWidth = 24;
 
   const [dragState, setDragState] = useState(null); // 'left', 'right', 'body'
@@ -12,6 +13,7 @@ const TimelineRow = ({ sprite, keyframes, totalFrames, currentFrame, isPlaying, 
 
   const handlePointerDown = (e, type) => {
     e.stopPropagation();
+    if (isLocked) return;
     setDragState(type);
     setDragStartX(e.clientX);
     setInitialRange({ start, end });
@@ -62,7 +64,8 @@ const TimelineRow = ({ sprite, keyframes, totalFrames, currentFrame, isPlaying, 
         </div>
         <button 
           onClick={() => onToggleShapeLock(sprite.id)}
-          className={`p-1 rounded transition-colors shrink-0 ${sprite.shapeLocked ? 'text-oled bg-oled/10' : 'text-[#666] hover:text-white hover:bg-[#333]'}`}
+          disabled={isLocked}
+          className={`p-1 rounded transition-colors shrink-0 ${isLocked ? 'text-yellow-400/60 cursor-not-allowed' : sprite.shapeLocked ? 'text-oled bg-oled/10' : 'text-[#666] hover:text-white hover:bg-[#333]'}`}
           title={sprite.shapeLocked ? "Shape Locked (Tweening Mode)" : "Shape Unlocked (Frame-by-Frame Mode)"}
         >
           {sprite.shapeLocked ? <Link size={10} /> : <Unlink size={10} />}

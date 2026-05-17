@@ -1,11 +1,11 @@
-import React, { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect } from 'react';
 import useProjectStore from '../../store/projectStore';
-import { getInterpolatedPosition } from '../../utils/tweenUtils';
+import { renderProjectFrame } from '../../utils/canvasUtils';
 
 const PreviewPanel = ({ onClose }) => {
   const canvasRef = useRef(null);
-  const { project, setCurrentFrame, setEditor, setMeta } = useProjectStore();
-  const { meta, sprites, keyframes, editor } = project;
+  const { project, setEditor, setMeta, tickFrame } = useProjectStore();
+  const { meta, editor } = project;
   const { currentFrame, isPlaying } = editor;
 
   // Playback Logic
@@ -13,11 +13,11 @@ const PreviewPanel = ({ onClose }) => {
     let interval;
     if (isPlaying) {
       interval = setInterval(() => {
-        setCurrentFrame((currentFrame + 1) % meta.totalFrames);
+        tickFrame();
       }, 1000 / meta.fps);
     }
     return () => clearInterval(interval);
-  }, [isPlaying, currentFrame, meta.fps, meta.totalFrames]);
+  }, [isPlaying, meta.fps, tickFrame]);
 
   // Render Logic
   useEffect(() => {
@@ -26,34 +26,8 @@ const PreviewPanel = ({ onClose }) => {
     const ctx = canvas.getContext('2d');
     const zoom = 2; // 2x scale for preview
 
-    // OLED Style: Black BG
-    ctx.fillStyle = 'black';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Render all visible sprites
-    sprites.forEach(sprite => {
-      if (!sprite.visible) return;
-
-      const pos = getInterpolatedPosition(keyframes[sprite.id], currentFrame);
-      if (!pos || !pos.visible) return;
-
-      // OLED Green
-      ctx.fillStyle = '#00FF41';
-      
-      for (let y = 0; y < sprite.height; y++) {
-        for (let x = 0; x < sprite.width; x++) {
-          if (sprite.pixels[y * sprite.width + x]) {
-            ctx.fillRect(
-              (pos.x + x) * zoom, 
-              (pos.y + y) * zoom, 
-              zoom, 
-              zoom
-            );
-          }
-        }
-      }
-    });
-  }, [sprites, keyframes, currentFrame]);
+    renderProjectFrame(ctx, project, currentFrame, zoom);
+  }, [project, currentFrame]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
